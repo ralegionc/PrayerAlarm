@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="calculation_methods">
+        <item>Muslim World League</item>
+        <item>Islamic Society of North America (ISNA)</item>
+        <item>Egyptian General Authority of Survey</item>
+        <item>Umm al-Qura University, Makkah</item>
+        <item>University of Islamic Sciences, Karachi</item>
+        <item>Institute of Geophysics, University of Tehran</item>
+        <item>Shia Ithna-Ashari (Jafari / Leva Qum)</item>
+        <item>Kuwait</item>
+        <item>Qatar</item>
+        <item>Singapore (MUIS)</item>
+        <item>Diyanet (Turkey)</item>
+        <item>Union of Islamic Organisations of France (UOIF)</item>
+        <item>Spiritual Administration of Muslims of Russia</item>
+        <item>Moonsighting Committee Worldwide</item>
+        <item>Custom</item>
+    </string-array>
+
+    <string-array name="madhabs">
+        <item>Standard (Shafi\'i / Maliki / Hanbali)</item>
+        <item>Hanafi</item>
+    </string-array>
+
+    <string-array name="alarm_modes">
+        <item>Off</item>
+        <item>Vibrate Only (always)</item>
+        <item>Full Azan on Home Wi-Fi Only</item>
+        <item>Full Azan Everywhere</item>
+    </string-array>
+</resources>
