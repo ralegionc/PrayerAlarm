@@ -23,9 +23,15 @@ object HomeNetwork {
     private fun readConfig(context: Context): Pair<String, String>? = try {
         val connectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        val network = connectivityManager?.activeNetwork
-        val capabilities = network?.let { connectivityManager.getNetworkCapabilities(it) }
-        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
+        // Deliberately not activeNetwork: that is whichever network carries the default route,
+        // which can be cellular while Wi-Fi is still connected -- during a VoLTE call, for
+        // instance. Asking it would report "not on Wi-Fi" while sitting on the home network.
+        @Suppress("DEPRECATION")
+        val network = connectivityManager?.allNetworks?.firstOrNull {
+            connectivityManager.getNetworkCapabilities(it)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        }
+        if (network == null) {
             null
         } else {
             val linkProperties = connectivityManager.getLinkProperties(network)

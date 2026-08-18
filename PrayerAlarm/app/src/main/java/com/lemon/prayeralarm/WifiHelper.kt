@@ -25,10 +25,14 @@ object WifiHelper {
     fun currentSsid(context: Context): String? = try {
         val connectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        val network = connectivityManager?.activeNetwork
-        val capabilities = network?.let { connectivityManager.getNetworkCapabilities(it) }
+        // Same reasoning as HomeNetwork: Wi-Fi can be connected without being the default route.
+        @Suppress("DEPRECATION")
+        val network = connectivityManager?.allNetworks?.firstOrNull {
+            connectivityManager.getNetworkCapabilities(it)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        }
 
-        if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
+        if (network == null) {
             null
         } else {
             val wifiManager =
