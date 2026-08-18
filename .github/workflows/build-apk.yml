@@ -9,7 +9,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Full history and tags: the version code is derived from them, and a shallow
+      # clone would report a commit count of 1.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

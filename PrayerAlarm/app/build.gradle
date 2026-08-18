@@ -3,6 +3,42 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Version numbers come from git rather than being edited by hand. Android refuses to install
+// an APK over one with an equal or lower versionCode, so a forgotten bump silently strands
+// everyone who already installed the app; deriving it removes that failure mode.
+def gitOutput(String... args) {
+    try {
+        def stdout = new ByteArrayOutputStream()
+        def result = exec {
+            commandLine args
+            standardOutput = stdout
+            errorOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+        return result.exitValue == 0 ? stdout.toString().trim() : ""
+    } catch (Exception ignored) {
+        return ""
+    }
+}
+
+def gitTag = gitOutput('git', 'describe', '--tags', '--abbrev=0')
+def gitCommits = gitOutput('git', 'rev-list', '--count', 'HEAD')
+def gitSha = gitOutput('git', 'rev-parse', '--short', 'HEAD')
+
+// A v1.2.3 tag becomes 1002003, leaving room for 999 minor and patch releases.
+def tagVersionCode = 0
+def tagMatch = (gitTag =~ /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/)
+if (tagMatch.find()) {
+    tagVersionCode = tagMatch.group(1).toInteger() * 1000000 +
+            (tagMatch.group(2) ?: '0').toInteger() * 1000 +
+            (tagMatch.group(3) ?: '0').toInteger()
+}
+def commitVersionCode = gitCommits ? gitCommits.toInteger() : 0
+
+// Whichever is larger, so an untagged build can never outrank a tagged one or vice versa.
+def computedVersionCode = Math.max(Math.max(tagVersionCode, commitVersionCode), 1)
+def computedVersionName = gitTag ? gitTag.replaceFirst(/^v/, '') : ("0.0.0-" + (gitSha ?: "dev"))
+
 // Signing material comes from a gitignored keystore.properties locally, or from environment
 // variables in CI. When neither is present the release build is simply left unsigned rather
 // than failing, so anyone can still clone and build the project.
@@ -27,8 +63,8 @@ android {
         applicationId "com.lemon.prayeralarm"
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode computedVersionCode
+        versionName computedVersionName
     }
 
     signingConfigs {
