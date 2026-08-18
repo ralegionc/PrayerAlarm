@@ -44,6 +44,11 @@ class PrefsRepository(context: Context) {
         get() = prefs.getString(KEY_LAST_SSID, "") ?: ""
         set(value) = prefs.edit().putString(KEY_LAST_SSID, value).apply()
 
+    /** Cached place name for the stored coordinates, shown in the widget. */
+    var cityName: String
+        get() = prefs.getString(KEY_CITY, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_CITY, value).apply()
+
     /** Minutes before each prayer to post a heads-up reminder. 0 disables it. */
     var preReminderMinutes: Int
         get() = prefs.getInt(KEY_PRE_REMINDER, 0)
@@ -80,6 +85,7 @@ class PrefsRepository(context: Context) {
         private const val KEY_MADHAB = "madhab"
         private const val KEY_HOME_SSID = "home_ssid"
         private const val KEY_LAST_SSID = "last_ssid"
+        private const val KEY_CITY = "city_name"
         private const val KEY_PRE_REMINDER = "pre_reminder_minutes"
         private const val KEY_AZAN_FAJR = "azan_fajr_uri"
         private const val KEY_AZAN_DEFAULT = "azan_default_uri"

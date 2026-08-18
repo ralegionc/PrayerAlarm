@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // Only a foreground caller can read the SSID; remember it for background alarms.
         WifiHelper.cacheCurrentSsid(this)
+        if (prefs.hasLocation && prefs.cityName.isBlank()) {
+            CityResolver.refresh(this, prefs.latitude, prefs.longitude)
+        }
         // App updates and force-stops clear pending alarms, and nothing else re-arms them,
         // so re-schedule on every visit rather than only after a location fix.
         AlarmScheduler.scheduleAll(this)
@@ -79,6 +82,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (location != null) {
                     prefs.setLocation(location.latitude, location.longitude)
+                    CityResolver.refresh(this, location.latitude, location.longitude)
                     AlarmScheduler.scheduleAll(this)
                 }
                 refreshUi()
