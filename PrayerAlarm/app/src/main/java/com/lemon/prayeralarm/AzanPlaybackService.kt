@@ -38,6 +38,16 @@ class AzanPlaybackService : Service() {
             return START_NOT_STICKY
         }
 
+        if (intent?.action == ACTION_SNOOZE) {
+            // The full-screen alarm screen is often suppressed, so snooze has to be reachable
+            // from the notification itself rather than only from that screen.
+            val key = intent.getStringExtra(AlarmScheduler.EXTRA_PRAYER)
+            val prayer = key?.let { Prayer.fromKey(it) } ?: currentPrayer ?: Prayer.FAJR
+            SnoozeScheduler.snooze(this, prayer, SNOOZE_MINUTES)
+            stopSelfCleanly()
+            return START_NOT_STICKY
+        }
+
         val prayerKey = intent?.getStringExtra(AlarmScheduler.EXTRA_PRAYER)
         val prayer = prayerKey?.let { Prayer.fromKey(it) } ?: Prayer.FAJR
         currentPrayer = prayer
@@ -164,6 +174,14 @@ class AzanPlaybackService : Service() {
             this, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val snoozeIntent = Intent(this, AzanPlaybackService::class.java).apply {
+            action = ACTION_SNOOZE
+            putExtra(AlarmScheduler.EXTRA_PRAYER, prayer.storageKey)
+        }
+        val snoozePendingIntent = PendingIntent.getService(
+            this, 1, snoozeIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val openIntent = Intent(this, AlarmActivity::class.java).apply {
             putExtra(AlarmScheduler.EXTRA_PRAYER, prayer.storageKey)
         }
@@ -179,7 +197,13 @@ class AzanPlaybackService : Service() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setOngoing(true)
             .setFullScreenIntent(fullScreenPendingIntent, true)
-            .addAction(0, getString(R.string.alarm_dismiss), stopPendingIntent)
+            .addAction(R.drawable.ic_notification, getString(R.string.alarm_snooze), snoozePendingIntent)
+            .addAction(R.drawable.ic_notification, getString(R.string.alarm_dismiss), stopPendingIntent)
+            // Keeps both buttons visible even when the shade shows the notification collapsed.
+            .setStyle(
+                androidx.core.app.NotificationCompat.BigTextStyle()
+                    .bigText(getString(R.string.notification_playing_text))
+            )
             .build()
     }
 
@@ -226,5 +250,7 @@ class AzanPlaybackService : Service() {
     companion object {
         private const val FADE_IN_MILLIS = 12_000L
         const val ACTION_STOP = "com.lemon.prayeralarm.ACTION_STOP_AZAN"
+        const val ACTION_SNOOZE = "com.lemon.prayeralarm.ACTION_SNOOZE_AZAN"
+        private const val SNOOZE_MINUTES = 5
     }
 }

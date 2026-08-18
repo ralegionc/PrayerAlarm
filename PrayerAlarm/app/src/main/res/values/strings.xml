@@ -56,6 +56,9 @@
     <string name="settings_save">Save changes</string>
     <string name="settings_saved">Saved. Alarms updated.</string>
     <string name="settings_mode_label">Alarm Mode</string>
+    <string name="settings_fsi_title">Allow full screen alarms</string>
+    <string name="settings_fsi_body">Without this Android shows only a notification when the azan plays, instead of the full alarm screen with Dismiss and Snooze buttons.</string>
+    <string name="settings_fsi_grant">Allow full screen alarms</string>
     <string name="settings_exact_alarm_warning">Exact alarms are not permitted. Tap to grant permission so prayer alarms fire on time.</string>
     <string name="settings_grant_permission">Grant Permission</string>
 

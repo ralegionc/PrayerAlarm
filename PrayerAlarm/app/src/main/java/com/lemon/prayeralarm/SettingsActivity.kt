@@ -1,6 +1,7 @@
 package com.lemon.prayeralarm
 
 import android.Manifest
+import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -50,6 +51,7 @@ class SettingsActivity : AppCompatActivity() {
         setupPerPrayerRows()
         setupExactAlarmWarning()
         binding.buttonSaveSettings.setOnClickListener { saveAll() }
+        binding.buttonGrantFullScreen.setOnClickListener { openFullScreenIntentSettings() }
         refreshComputedTimes()
     }
 
@@ -58,6 +60,7 @@ class SettingsActivity : AppCompatActivity() {
         refreshAzanLabels()
         refreshHomeNetwork()
         setupExactAlarmWarning()
+        refreshFullScreenCard()
         refreshComputedTimes()
     }
 
@@ -247,6 +250,27 @@ class SettingsActivity : AppCompatActivity() {
         }
         rescheduleAlarms()
         PrayerWidgetProvider.refreshAll(this)
+    }
+
+    /**
+     * From Android 14 a full-screen intent is only honoured for apps the system classes as
+     * alarm or calling apps; for anything else it silently degrades to a heads-up notification,
+     * which is why the alarm screen with its buttons never appeared.
+     */
+    private fun refreshFullScreenCard() {
+        val blocked = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+            !(getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() ?: true)
+        binding.cardFullScreen.visibility =
+            if (blocked) android.view.View.VISIBLE else android.view.View.GONE
+    }
+
+    private fun openFullScreenIntentSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
+        startActivity(
+            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
+        )
     }
 
     private fun saveAll() {
