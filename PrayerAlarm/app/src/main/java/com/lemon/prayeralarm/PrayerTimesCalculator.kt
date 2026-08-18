@@ -48,8 +48,10 @@ object PrayerTimesCalculator {
             times = computePass(times, jDate, latitude, method, madhab)
         }
 
+        val resolved = adjustHighLatitudes(times.toMutableMap(), method)
+
         val correction = timeZoneOffsetHours - longitude / 15.0
-        val adjusted = times.mapValues { it.value + correction }.toMutableMap()
+        val adjusted = resolved.mapValues { it.value + correction }.toMutableMap()
 
         if (method.ishaIntervalMinutes > 0) {
             adjusted["isha"] = adjusted["maghrib"]!! + method.ishaIntervalMinutes / 60.0
@@ -91,6 +93,58 @@ object PrayerTimesCalculator {
         )
     }
 
+    /**
+     * Angle-based high-latitude rule.
+     *
+     * Above roughly 48 degrees the sun stops dipping far enough below the horizon in summer for
+     * Fajr and Isha to occur at all. Rather than emit a bogus time, each affected prayer is
+     * pulled to a fraction of the night proportional to its twilight angle, measured from
+     * sunrise or sunset. Times that are already valid are left untouched, so this is a no-op
+     * at lower latitudes.
+     */
+    private fun adjustHighLatitudes(
+        times: MutableMap<String, Double>,
+        method: CalculationMethod
+    ): MutableMap<String, Double> {
+        val sunrise = times.getValue("sunrise")
+        val sunset = times.getValue("sunset")
+        // Polar day or night: there is no sunrise/sunset to anchor the night against.
+        if (sunrise.isNaN() || sunset.isNaN()) return times
+
+        val night = fixHour(sunrise - sunset)
+
+        times["fajr"] = adjustToNightPortion(
+            times.getValue("fajr"), sunrise, method.fajrAngle, night, before = true
+        )
+        val ishaAngle = if (method.ishaIntervalMinutes > 0) 18.0 else method.ishaAngle
+        times["isha"] = adjustToNightPortion(
+            times.getValue("isha"), sunset, ishaAngle, night, before = false
+        )
+        if (method.maghribAngle > 0.0) {
+            times["maghrib"] = adjustToNightPortion(
+                times.getValue("maghrib"), sunset, method.maghribAngle, night, before = false
+            )
+        }
+        return times
+    }
+
+    /** Caps [time] at [angle]/60 of the night away from [base], substituting it when undefined. */
+    private fun adjustToNightPortion(
+        time: Double,
+        base: Double,
+        angle: Double,
+        night: Double,
+        before: Boolean
+    ): Double {
+        val portion = angle / 60.0 * night
+        val diff = if (before) fixHour(base - time) else fixHour(time - base)
+        return if (time.isNaN() || diff > portion) {
+            if (before) base - portion else base + portion
+        } else {
+            time
+        }
+    }
+
     private fun riseSetAngle(elevationMeters: Double = 0.0): Double =
         0.833 + 0.0347 * sqrt(max(0.0, elevationMeters))
 
@@ -102,8 +156,11 @@ object PrayerTimesCalculator {
     private fun sunAngleTime(angle: Double, time: Double, jDate: Double, lat: Double, ccw: Boolean): Double {
         val decl = sunPosition(jDate + time).declination
         val noon = midDay(time, jDate)
-        val cosArg = ((-dsin(angle) - dsin(decl) * dsin(lat)) / (dcos(decl) * dcos(lat)))
-            .coerceIn(-1.0, 1.0) // guards against NaN at extreme latitudes/seasons
+        val cosArg = (-dsin(angle) - dsin(decl) * dsin(lat)) / (dcos(decl) * dcos(lat))
+        // The sun never reaches this depression angle on this date at this latitude. Returning
+        // NaN keeps the failure visible so adjustHighLatitudes can substitute a real rule;
+        // clamping here would instead yield a plausible-looking but wrong prayer time.
+        if (cosArg > 1.0 || cosArg < -1.0) return Double.NaN
         val t = (1.0 / 15.0) * darccos(cosArg)
         return noon + if (ccw) -t else t
     }

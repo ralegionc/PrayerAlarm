@@ -7,8 +7,12 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.os.CountDownTimer
+import android.os.Handler
+import android.os.Looper
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
@@ -24,6 +28,7 @@ class AzanPlaybackService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var safetyTimer: CountDownTimer? = null
     private var currentPrayer: Prayer? = null
+    private val fadeHandler = Handler(Looper.getMainLooper())
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -40,36 +45,109 @@ class AzanPlaybackService : Service() {
         NotificationHelper.ensureChannels(this)
         startForeground(NotificationHelper.NOTIFICATION_ID_AZAN, buildNotification(prayer))
         acquireWakeLock()
-        startPlayback()
+        startPlayback(prayer)
         launchAlarmActivity(prayer)
         armSafetyTimeout()
 
         return START_STICKY
     }
 
-    private fun startPlayback() {
+    /**
+     * Plays, in order of preference: the user's own recording for this prayer, the device's
+     * alarm ringtone, then the bundled placeholder clip. A user's full adhan plays once; the
+     * short fallback sounds loop until dismissed.
+     */
+    private fun startPlayback(prayer: Prayer) {
         mediaPlayer?.release()
-        mediaPlayer = MediaPlayer().apply {
-            setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
-            isLooping = true
-            try {
-                val afd = resources.openRawResourceFd(R.raw.azan_placeholder)
-                setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                afd.close()
-                prepare()
-                start()
-            } catch (e: Exception) {
-                // If the audio resource is missing/corrupt, fail silently rather than crash.
-            }
+
+        val userAzan = preparedPlayer(AzanSound.uriFor(this, prayer), loop = false)
+        val player = userAzan
+            ?: preparedPlayer(systemAlarmUri(), loop = true)
+            ?: preparedBundledPlayer()
+
+        if (userAzan != null) {
+            // A one-shot recording would otherwise leave the service running silently until
+            // the safety timeout; stop as soon as the adhan finishes on its own.
+            userAzan.setOnCompletionListener { stopSelfCleanly() }
+        }
+
+        mediaPlayer = player
+        player?.let {
+            it.start()
+            startFadeIn(it)
         }
 
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         audioManager.mode = AudioManager.MODE_NORMAL
+    }
+
+    /**
+     * Ramps the volume up from silence so a 4am Fajr alarm does not start at full blast.
+     * Steps are dropped if the player has since been replaced or released.
+     */
+    private fun startFadeIn(player: MediaPlayer) {
+        fadeHandler.removeCallbacksAndMessages(null)
+        val steps = 20
+        val stepMillis = FADE_IN_MILLIS / steps
+        try {
+            player.setVolume(0f, 0f)
+        } catch (e: IllegalStateException) {
+            return
+        }
+        for (step in 1..steps) {
+            fadeHandler.postDelayed({
+                if (mediaPlayer === player) {
+                    try {
+                        val level = step / steps.toFloat()
+                        player.setVolume(level, level)
+                    } catch (e: IllegalStateException) {
+                        // Released mid-fade; nothing left to raise.
+                    }
+                }
+            }, stepMillis * step)
+        }
+    }
+
+    private fun alarmAttributes(): AudioAttributes =
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
+    private fun systemAlarmUri(): Uri? =
+        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+
+    /** Returns a prepared player, or null if [uri] is missing, unreadable or not decodable. */
+    private fun preparedPlayer(uri: Uri?, loop: Boolean): MediaPlayer? {
+        if (uri == null) return null
+        val player = MediaPlayer()
+        return try {
+            player.setAudioAttributes(alarmAttributes())
+            player.isLooping = loop
+            player.setDataSource(this, uri)
+            player.prepare()
+            player
+        } catch (e: Exception) {
+            player.release()
+            null
+        }
+    }
+
+    private fun preparedBundledPlayer(): MediaPlayer? {
+        val player = MediaPlayer()
+        return try {
+            player.setAudioAttributes(alarmAttributes())
+            player.isLooping = true
+            resources.openRawResourceFd(R.raw.azan_placeholder).use { afd ->
+                player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+            }
+            player.prepare()
+            player
+        } catch (e: Exception) {
+            player.release()
+            null
+        }
     }
 
     private fun launchAlarmActivity(prayer: Prayer) {
@@ -123,6 +201,7 @@ class AzanPlaybackService : Service() {
     }
 
     private fun stopSelfCleanly() {
+        fadeHandler.removeCallbacksAndMessages(null)
         safetyTimer?.cancel()
         mediaPlayer?.let {
             try {
@@ -145,6 +224,7 @@ class AzanPlaybackService : Service() {
     }
 
     companion object {
+        private const val FADE_IN_MILLIS = 12_000L
         const val ACTION_STOP = "com.lemon.prayeralarm.ACTION_STOP_AZAN"
     }
 }

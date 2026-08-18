@@ -1,0 +1,11 @@
+# Normalise line endings: checked in as LF, checked out native.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.png binary
+*.jpg binary
+*.jks binary
+*.keystore binary

@@ -13,6 +13,7 @@ import com.lemon.prayeralarm.databinding.ItemPrayerRowBinding
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.chrono.HijrahDate
 import java.time.format.DateTimeFormatter
 
 class MainActivity : AppCompatActivity() {
@@ -34,6 +35,9 @@ class MainActivity : AppCompatActivity() {
         NotificationHelper.ensureChannels(this)
 
         binding.buttonUpdateLocation.setOnClickListener { requestPermissionsAndLocation() }
+        binding.buttonQibla.setOnClickListener {
+            startActivity(Intent(this, QiblaActivity::class.java))
+        }
         binding.buttonSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -46,6 +50,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Only a foreground caller can read the SSID; remember it for background alarms.
+        WifiHelper.cacheCurrentSsid(this)
+        // App updates and force-stops clear pending alarms, and nothing else re-arms them,
+        // so re-schedule on every visit rather than only after a location fix.
+        AlarmScheduler.scheduleAll(this)
+        PrayerWidgetProvider.refreshAll(this)
         refreshUi()
     }
 
@@ -77,9 +87,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshUi() {
+        binding.textHijriDate.text = hijriDateText()
+
         if (!prefs.hasLocation) {
             binding.textLocation.text = getString(R.string.label_no_location)
             binding.textNextPrayer.text = ""
+            binding.textLastThird.text = ""
             binding.prayerListContainer.removeAllViews()
             return
         }
@@ -94,19 +107,60 @@ class MainActivity : AppCompatActivity() {
             val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
             val inflater = LayoutInflater.from(this)
 
+            // Sunrise is not a prayer, but it closes the Fajr window, so it belongs in the list.
+            val sunrise = AlarmScheduler.rawTimesForDate(this, today)?.sunrise
             for (prayer in Prayer.values()) {
-                val rowBinding = ItemPrayerRowBinding.inflate(inflater, binding.prayerListContainer, false)
-                rowBinding.rowPrayerName.text = NotificationHelper.prayerName(this, prayer)
-                rowBinding.rowPrayerTime.text = todayTimes.getValue(prayer).format(timeFormatter)
-                binding.prayerListContainer.addView(rowBinding.root)
+                addRow(
+                    inflater,
+                    NotificationHelper.prayerName(this, prayer),
+                    todayTimes.getValue(prayer).format(timeFormatter)
+                )
+                if (prayer == Prayer.FAJR && sunrise != null) {
+                    addRow(
+                        inflater,
+                        getString(R.string.prayer_sunrise),
+                        sunrise.format(timeFormatter)
+                    )
+                }
             }
 
             binding.textNextPrayer.text = describeNextPrayer(today, todayTimes)
+            binding.textLastThird.text = lastThirdText(today, timeFormatter)
         }
 
         val needsExactAlarmPermission =
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !AlarmScheduler.canScheduleExact(this)
         binding.textExactAlarmWarning.visibility = if (needsExactAlarmPermission) android.view.View.VISIBLE else android.view.View.GONE
+    }
+
+    private fun addRow(inflater: LayoutInflater, name: String, time: String) {
+        val rowBinding = ItemPrayerRowBinding.inflate(inflater, binding.prayerListContainer, false)
+        rowBinding.rowPrayerName.text = name
+        rowBinding.rowPrayerTime.text = time
+        binding.prayerListContainer.addView(rowBinding.root)
+    }
+
+    /** Today's date in the Islamic calendar, via the JDK's Umm al-Qura implementation. */
+    private fun hijriDateText(): String = try {
+        val hijri = HijrahDate.from(LocalDate.now())
+        getString(R.string.label_hijri_date, hijri.format(DateTimeFormatter.ofPattern("d MMMM yyyy")))
+    } catch (e: Exception) {
+        ""
+    }
+
+    /**
+     * Start of the final third of the night, measured from Maghrib to the following Fajr —
+     * the window traditionally used for Tahajjud.
+     */
+    private fun lastThirdText(today: LocalDate, formatter: DateTimeFormatter): String {
+        val tonight = AlarmScheduler.rawTimesForDate(this, today) ?: return ""
+        val tomorrow = AlarmScheduler.rawTimesForDate(this, today.plusDays(1)) ?: return ""
+        val maghrib = LocalDateTime.of(today, tonight.maghrib)
+        val fajr = LocalDateTime.of(today.plusDays(1), tomorrow.fajr)
+        val nightMinutes = Duration.between(maghrib, fajr).toMinutes()
+        if (nightMinutes <= 0) return ""
+        val start = maghrib.plusMinutes(nightMinutes * 2 / 3)
+        return getString(R.string.label_last_third, start.format(formatter))
     }
 
     private fun describeNextPrayer(today: LocalDate, todayTimes: Map<Prayer, java.time.LocalTime>): String {

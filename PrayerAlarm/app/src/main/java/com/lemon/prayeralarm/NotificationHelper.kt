@@ -13,8 +13,10 @@ import androidx.core.app.NotificationCompat
 object NotificationHelper {
     const val CHANNEL_AZAN = "azan_alarms"
     const val CHANNEL_SILENT = "silent_reminders"
+    const val CHANNEL_PRE = "pre_reminders"
     const val NOTIFICATION_ID_AZAN = 5501
     const val NOTIFICATION_ID_VIBRATE = 5502
+    const val NOTIFICATION_ID_PRE = 5503
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -41,8 +43,19 @@ object NotificationHelper {
             vibrationPattern = longArrayOf(0, 400, 200, 400, 200, 400)
         }
 
+        // Deliberately quieter than the alarm channels: this is a nudge, not the call itself.
+        val preChannel = NotificationChannel(
+            CHANNEL_PRE,
+            context.getString(R.string.notification_channel_pre),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = context.getString(R.string.notification_channel_pre_desc)
+            enableVibration(false)
+        }
+
         manager.createNotificationChannel(azanChannel)
         manager.createNotificationChannel(silentChannel)
+        manager.createNotificationChannel(preChannel)
     }
 
     fun showVibrateReminder(context: Context, prayer: Prayer) {
@@ -67,6 +80,31 @@ object NotificationHelper {
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID_VIBRATE, notification)
+    }
+
+    /** Heads-up posted [minutes] before [prayer], so there is time to wrap up. */
+    fun showPreReminder(context: Context, prayer: Prayer, minutes: Int) {
+        ensureChannels(context)
+
+        val openIntent = Intent(context, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            context, 1, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_PRE)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(
+                context.getString(R.string.notification_pre_title, prayerName(context, prayer), minutes)
+            )
+            .setContentText(context.getString(R.string.notification_pre_text))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(NOTIFICATION_ID_PRE, notification)
     }
 
     private fun vibrate(context: Context) {

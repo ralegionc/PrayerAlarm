@@ -11,6 +11,15 @@ class AlarmReceiver : BroadcastReceiver() {
         val prayerKey = intent.getStringExtra(AlarmScheduler.EXTRA_PRAYER)
         val prayer = prayerKey?.let { Prayer.fromKey(it) }
 
+        // A lead-time nudge only posts a notification; it must not touch the real alarms.
+        if (intent.action == AlarmScheduler.ACTION_PRE_REMINDER) {
+            if (prayer != null) {
+                val lead = PrefsRepository(context).preReminderMinutes
+                if (lead > 0) NotificationHelper.showPreReminder(context, prayer, lead)
+            }
+            return
+        }
+
         if (prayer != null) {
             val prefs = PrefsRepository(context)
             val mode = prefs.alarmMode(prayer)
@@ -35,5 +44,6 @@ class AlarmReceiver : BroadcastReceiver() {
 
         // Recompute and re-arm alarms for the following day.
         AlarmScheduler.scheduleAll(context)
+        PrayerWidgetProvider.refreshAll(context)
     }
 }

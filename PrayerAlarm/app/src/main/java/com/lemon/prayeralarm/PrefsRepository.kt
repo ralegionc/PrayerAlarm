@@ -36,6 +36,29 @@ class PrefsRepository(context: Context) {
         get() = prefs.getString(KEY_HOME_SSID, "") ?: ""
         set(value) = prefs.edit().putString(KEY_HOME_SSID, value).apply()
 
+    /**
+     * Last Wi-Fi SSID observed while the app was in the foreground. Android hides the SSID
+     * from background callers, so alarms compare against this remembered value instead.
+     */
+    var lastSeenSsid: String
+        get() = prefs.getString(KEY_LAST_SSID, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_LAST_SSID, value).apply()
+
+    /** Minutes before each prayer to post a heads-up reminder. 0 disables it. */
+    var preReminderMinutes: Int
+        get() = prefs.getInt(KEY_PRE_REMINDER, 0)
+        set(value) = prefs.edit().putInt(KEY_PRE_REMINDER, value).apply()
+
+    /** Content URI of the user's Fajr azan recording, or "" to fall back. */
+    var fajrAzanUri: String
+        get() = prefs.getString(KEY_AZAN_FAJR, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_AZAN_FAJR, value).apply()
+
+    /** Content URI of the azan used for the other four prayers, or "" to fall back. */
+    var defaultAzanUri: String
+        get() = prefs.getString(KEY_AZAN_DEFAULT, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_AZAN_DEFAULT, value).apply()
+
     fun offsetMinutes(prayer: Prayer): Int =
         prefs.getInt(KEY_OFFSET_PREFIX + prayer.storageKey, 0)
 
@@ -56,6 +79,10 @@ class PrefsRepository(context: Context) {
         private const val KEY_METHOD = "calc_method"
         private const val KEY_MADHAB = "madhab"
         private const val KEY_HOME_SSID = "home_ssid"
+        private const val KEY_LAST_SSID = "last_ssid"
+        private const val KEY_PRE_REMINDER = "pre_reminder_minutes"
+        private const val KEY_AZAN_FAJR = "azan_fajr_uri"
+        private const val KEY_AZAN_DEFAULT = "azan_default_uri"
         private const val KEY_OFFSET_PREFIX = "offset_"
         private const val KEY_MODE_PREFIX = "mode_"
     }

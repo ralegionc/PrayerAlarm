@@ -31,6 +31,14 @@
             android:textSize="13sp" />
 
         <TextView
+            android:id="@+id/textHijriDate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/muted"
+            android:textSize="13sp" />
+
+        <TextView
             android:id="@+id/textNextPrayer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -50,6 +58,14 @@
             android:paddingVertical="8dp" />
 
         <TextView
+            android:id="@+id/textLastThird"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:textColor="@color/muted"
+            android:textSize="13sp" />
+
+        <TextView
             android:id="@+id/textExactAlarmWarning"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -66,6 +82,13 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:text="@string/btn_refresh_location" />
+
+        <Button
+            android:id="@+id/buttonQibla"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/btn_qibla" />
 
         <Button
             android:id="@+id/buttonSettings"
