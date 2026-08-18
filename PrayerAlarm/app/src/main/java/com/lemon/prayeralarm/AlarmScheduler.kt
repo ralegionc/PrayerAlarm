@@ -139,6 +139,28 @@ object AlarmScheduler {
         )
     }
 
+    /**
+     * Times for [date] computed from explicitly supplied settings rather than what is stored.
+     * Lets the settings screen preview the effect of a choice the user has not saved yet.
+     */
+    fun previewTimes(
+        context: Context,
+        date: LocalDate,
+        methodIndex: Int,
+        madhabIndex: Int
+    ): PrayerTimesCalculator.Times? {
+        val prefs = PrefsRepository(context)
+        if (!prefs.hasLocation) return null
+        return PrayerTimesCalculator.calculate(
+            date,
+            prefs.latitude,
+            prefs.longitude,
+            tzHoursFor(date),
+            CalculationMethod.forIndex(methodIndex),
+            Madhab.fromIndex(madhabIndex)
+        )
+    }
+
     /** Prayer times for [date], with per-prayer minute offsets already applied. */
     fun timesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime>? {
         val prefs = PrefsRepository(context)
@@ -168,7 +190,8 @@ object AlarmScheduler {
         return null
     }
 
-    private fun rawTimeFor(prayer: Prayer, times: PrayerTimesCalculator.Times): LocalTime = when (prayer) {
+    /** The astronomical time for one prayer, before any user offset. */
+    fun rawTimeFor(prayer: Prayer, times: PrayerTimesCalculator.Times): LocalTime = when (prayer) {
         Prayer.FAJR -> times.fajr
         Prayer.DHUHR -> times.dhuhr
         Prayer.ASR -> times.asr

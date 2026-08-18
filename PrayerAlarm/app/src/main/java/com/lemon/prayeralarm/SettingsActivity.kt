@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.widget.AdapterView
 import android.widget.Toast
@@ -12,6 +14,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import com.lemon.prayeralarm.databinding.ActivitySettingsBinding
 import com.lemon.prayeralarm.databinding.ItemPrayerSettingsRowBinding
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -42,6 +46,8 @@ class SettingsActivity : AppCompatActivity() {
         setupAzanFields()
         setupPerPrayerRows()
         setupExactAlarmWarning()
+        binding.buttonSaveSettings.setOnClickListener { saveAll() }
+        refreshComputedTimes()
     }
 
     override fun onResume() {
@@ -53,6 +59,7 @@ class SettingsActivity : AppCompatActivity() {
             WifiHelper.currentSsid(this) ?: "—"
         )
         setupExactAlarmWarning()
+        refreshComputedTimes()
     }
 
     /**
@@ -68,8 +75,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.spinnerMethod.setSelection(prefs.calculationMethodIndex)
         binding.spinnerMethod.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                prefs.calculationMethodIndex = position
-                rescheduleAlarms()
+                refreshComputedTimes()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -79,8 +85,7 @@ class SettingsActivity : AppCompatActivity() {
         binding.spinnerMadhab.setSelection(prefs.madhabIndex)
         binding.spinnerMadhab.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                prefs.madhabIndex = position
-                rescheduleAlarms()
+                refreshComputedTimes()
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -179,18 +184,19 @@ class SettingsActivity : AppCompatActivity() {
             rowBinding.rowOffset.setText(prefs.offsetMinutes(prayer).toString())
             rowBinding.rowModeSpinner.setSelection(prefs.alarmMode(prayer).index)
 
-            rowBinding.rowOffset.setOnFocusChangeListener { _, hasFocus ->
-                if (!hasFocus) {
-                    val minutes = rowBinding.rowOffset.text.toString().toIntOrNull() ?: 0
-                    prefs.setOffsetMinutes(prayer, minutes)
-                    rescheduleAlarms()
+            // Typing an offset moves the alarm-time line straight away, so the effect of a
+            // change is visible before it is saved.
+            rowBinding.rowOffset.addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(e: Editable?) {
+                    refreshComputedTimes()
                 }
-            }
+            })
 
             rowBinding.rowModeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                    prefs.setAlarmMode(prayer, AlarmMode.fromIndex(position))
-                    rescheduleAlarms()
+                    refreshComputedTimes()
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
@@ -217,16 +223,63 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    /** Writes every control on the screen, then re-arms the alarms to match. */
     private fun persistPendingEdits() {
+        prefs.calculationMethodIndex = binding.spinnerMethod.selectedItemPosition
+        prefs.madhabIndex = binding.spinnerMadhab.selectedItemPosition
         prefs.homeSsid = binding.editHomeSsid.text.toString().trim()
         // Clamped so a stray keystroke cannot push the nudge hours away from the prayer.
         prefs.preReminderMinutes =
             (binding.editPreReminder.text.toString().toIntOrNull() ?: 0).coerceIn(0, 120)
         for ((prayer, rowBinding) in rowBindings) {
-            val minutes = rowBinding.rowOffset.text.toString().toIntOrNull() ?: 0
-            prefs.setOffsetMinutes(prayer, minutes)
+            prefs.setOffsetMinutes(prayer, rowBinding.rowOffset.text.toString().toIntOrNull() ?: 0)
+            prefs.setAlarmMode(
+                prayer,
+                AlarmMode.fromIndex(rowBinding.rowModeSpinner.selectedItemPosition)
+            )
         }
         rescheduleAlarms()
+        PrayerWidgetProvider.refreshAll(this)
+    }
+
+    private fun saveAll() {
+        persistPendingEdits()
+        refreshComputedTimes()
+        Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Shows each prayer time and the alarm time the current settings would produce.
+     *
+     * Computed from the controls rather than from storage, so the numbers track unsaved edits
+     * and an offset can be lined up against the real prayer time before it is committed.
+     */
+    private fun refreshComputedTimes() {
+        val times = AlarmScheduler.previewTimes(
+            this,
+            LocalDate.now(),
+            binding.spinnerMethod.selectedItemPosition,
+            binding.spinnerMadhab.selectedItemPosition
+        )
+        for ((prayer, rowBinding) in rowBindings) {
+            if (times == null) {
+                rowBinding.rowPrayerTime.text = ""
+                rowBinding.rowAlarmTime.text = getString(R.string.settings_no_time)
+                continue
+            }
+            val raw = AlarmScheduler.rawTimeFor(prayer, times)
+            rowBinding.rowPrayerTime.text = raw.format(TIME_FORMAT)
+            val mode = AlarmMode.fromIndex(rowBinding.rowModeSpinner.selectedItemPosition)
+            rowBinding.rowAlarmTime.text = if (mode == AlarmMode.OFF) {
+                getString(R.string.settings_alarm_off)
+            } else {
+                val offset = rowBinding.rowOffset.text.toString().toIntOrNull() ?: 0
+                getString(
+                    R.string.settings_alarm_at,
+                    raw.plusMinutes(offset.toLong()).format(TIME_FORMAT)
+                )
+            }
+        }
     }
 
     private fun rescheduleAlarms() {
@@ -235,5 +288,6 @@ class SettingsActivity : AppCompatActivity() {
 
     companion object {
         private val AUDIO_MIME_TYPES = arrayOf("audio/*")
+        private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
     }
 }

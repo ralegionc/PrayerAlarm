@@ -42,7 +42,13 @@
     <string name="settings_azan_none_ringtone">Not set — your alarm ringtone will be used</string>
     <string name="settings_azan_none_shared">Not set — the shared azan above will be used</string>
     <string name="settings_azan_unreadable">Could not read that file. Try another, or copy it into device storage first.</string>
-    <string name="settings_offset_label">Offset (minutes)</string>
+    <string name="settings_offset_label">Ring this many minutes later</string>
+    <string name="settings_prayer_time_label">Prayer time</string>
+    <string name="settings_alarm_at">Alarm rings at %1$s</string>
+    <string name="settings_alarm_off">Alarm off</string>
+    <string name="settings_no_time">Set your location first</string>
+    <string name="settings_save">Save changes</string>
+    <string name="settings_saved">Saved. Alarms updated.</string>
     <string name="settings_mode_label">Alarm Mode</string>
     <string name="settings_exact_alarm_warning">Exact alarms are not permitted. Tap to grant permission so prayer alarms fire on time.</string>
     <string name="settings_grant_permission">Grant Permission</string>
