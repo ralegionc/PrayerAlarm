@@ -26,7 +26,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
             val shouldPlayLoud = when (mode) {
                 AlarmMode.LOUD_EVERYWHERE -> true
-                AlarmMode.LOUD_HOME_WIFI_ONLY -> WifiHelper.isConnectedToHomeNetwork(context, prefs.homeSsid)
+                AlarmMode.LOUD_HOME_WIFI_ONLY -> HomeNetwork.isAtHome(context)
                 AlarmMode.VIBRATE_ALWAYS, AlarmMode.OFF -> false
             }
 

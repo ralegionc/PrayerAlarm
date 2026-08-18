@@ -26,18 +26,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var prefs: PrefsRepository
     private val rowBindings = mutableMapOf<Prayer, ItemPrayerSettingsRowBinding>()
 
-    private val requestBackgroundLocation =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) {
-                Toast.makeText(this, R.string.settings_bg_location_ok, Toast.LENGTH_LONG).show()
-            } else {
-                // From Android 11 the system stops showing this prompt, so the only remaining
-                // route to "Allow all the time" is the app's own settings page.
-                openAppDetails()
-            }
-            refreshBackgroundLocationCard()
-        }
-
     private val pickFajrAzan =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             onAzanPicked(uri, forFajr = true)
@@ -62,22 +50,15 @@ class SettingsActivity : AppCompatActivity() {
         setupPerPrayerRows()
         setupExactAlarmWarning()
         binding.buttonSaveSettings.setOnClickListener { saveAll() }
-        binding.buttonGrantBgLocation.setOnClickListener { requestBackgroundLocationAccess() }
         refreshComputedTimes()
-        refreshBackgroundLocationCard()
     }
 
     override fun onResume() {
         super.onResume()
-        WifiHelper.cacheCurrentSsid(this)
         refreshAzanLabels()
-        binding.textCurrentSsid.text = getString(
-            R.string.settings_home_wifi_current,
-            WifiHelper.currentSsid(this) ?: "—"
-        )
+        refreshHomeNetwork()
         setupExactAlarmWarning()
         refreshComputedTimes()
-        refreshBackgroundLocationCard()
     }
 
     /**
@@ -110,20 +91,29 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupWifiFields() {
-        binding.editHomeSsid.setText(prefs.homeSsid)
-        binding.editHomeSsid.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) {
-                prefs.homeSsid = binding.editHomeSsid.text.toString().trim()
-                rescheduleAlarms()
-            }
-        }
         binding.buttonUseCurrentSsid.setOnClickListener {
-            val current = WifiHelper.currentSsid(this)
-            if (current != null) {
-                binding.editHomeSsid.setText(current)
-                prefs.homeSsid = current
+            if (HomeNetwork.markCurrentAsHome(this)) {
+                Toast.makeText(this, R.string.settings_home_saved, Toast.LENGTH_SHORT).show()
                 rescheduleAlarms()
+            } else {
+                Toast.makeText(this, R.string.settings_home_need_wifi, Toast.LENGTH_LONG).show()
             }
+            refreshHomeNetwork()
+        }
+        binding.buttonClearHome.setOnClickListener {
+            HomeNetwork.clearHome(this)
+            rescheduleAlarms()
+            refreshHomeNetwork()
+        }
+        refreshHomeNetwork()
+    }
+
+    /** Shows which network counts as home, and what the phone is on right now. */
+    private fun refreshHomeNetwork() {
+        binding.textHomeNetwork.text = when {
+            !HomeNetwork.hasHomeNetwork(this) -> getString(R.string.settings_home_unset)
+            prefs.homeSsid.isNotBlank() -> getString(R.string.settings_home_set, prefs.homeSsid)
+            else -> getString(R.string.settings_home_set_unnamed)
         }
         binding.textCurrentSsid.text = getString(
             R.string.settings_home_wifi_current,
@@ -215,7 +205,6 @@ class SettingsActivity : AppCompatActivity() {
             rowBinding.rowModeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
                     refreshComputedTimes()
-                    refreshBackgroundLocationCard()
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
@@ -246,7 +235,6 @@ class SettingsActivity : AppCompatActivity() {
     private fun persistPendingEdits() {
         prefs.calculationMethodIndex = binding.spinnerMethod.selectedItemPosition
         prefs.madhabIndex = binding.spinnerMadhab.selectedItemPosition
-        prefs.homeSsid = binding.editHomeSsid.text.toString().trim()
         // Clamped so a stray keystroke cannot push the nudge hours away from the prayer.
         prefs.preReminderMinutes =
             (binding.editPreReminder.text.toString().toIntOrNull() ?: 0).coerceIn(0, 120)
@@ -259,52 +247,6 @@ class SettingsActivity : AppCompatActivity() {
         }
         rescheduleAlarms()
         PrayerWidgetProvider.refreshAll(this)
-    }
-
-    /**
-     * True when the Wi-Fi name is readable from a background alarm.
-     *
-     * Below Android 10 there is no separate background permission and the foreground grant is
-     * enough, so nothing needs asking for.
-     */
-    private fun hasBackgroundLocation(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_BACKGROUND_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-
-    /** Whether any prayer is set to the mode that actually depends on knowing the network. */
-    private fun usesHomeWifiMode(): Boolean = rowBindings.values.any {
-        AlarmMode.fromIndex(it.rowModeSpinner.selectedItemPosition) == AlarmMode.LOUD_HOME_WIFI_ONLY
-    }
-
-    /** The prompt only appears when home Wi-Fi mode is in use and the grant is still missing. */
-    private fun refreshBackgroundLocationCard() {
-        val needed = usesHomeWifiMode() && !hasBackgroundLocation()
-        binding.cardBgLocation.visibility =
-            if (needed) android.view.View.VISIBLE else android.view.View.GONE
-    }
-
-    private fun requestBackgroundLocationAccess() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            // Background access cannot be granted before foreground access exists.
-            openAppDetails()
-            return
-        }
-        requestBackgroundLocation.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-    }
-
-    private fun openAppDetails() {
-        Toast.makeText(this, R.string.settings_bg_location_hint, Toast.LENGTH_LONG).show()
-        startActivity(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", packageName, null)
-            }
-        )
     }
 
     private fun saveAll() {

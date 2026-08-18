@@ -27,17 +27,17 @@
 
     <string name="settings_calc_method">Calculation Method</string>
     <string name="settings_madhab">Asr Calculation (Madhab)</string>
-    <string name="settings_home_wifi">Home Wi-Fi Network Name (SSID)</string>
-    <string name="settings_home_wifi_hint">e.g. MyHomeWiFi</string>
+    <string name="settings_home_wifi">Home network</string>
+    <string name="settings_home_explainer">Recognised by the router it uses rather than its name, so alarms can check it without needing location access in the background.</string>
+    <string name="settings_home_set">Home: %1$s</string>
+    <string name="settings_home_set_unnamed">Home network saved</string>
+    <string name="settings_home_unset">Not set. Home Wi-Fi mode will stay silent until you set one.</string>
+    <string name="settings_home_saved">Saved this network as home.</string>
+    <string name="settings_home_need_wifi">Connect to your home Wi-Fi first.</string>
+    <string name="settings_home_clear">Clear</string>
     <string name="settings_home_wifi_current">Currently connected to: %1$s</string>
     <string name="settings_use_current_wifi">Use Current Network</string>
     <string name="settings_per_prayer_header">Per-Prayer Alarm Settings</string>
-
-    <string name="settings_bg_location_title">Allow location all the time</string>
-    <string name="settings_bg_location_body">Home Wi-Fi mode needs to check which network you are on when an alarm fires. Android only reveals the Wi-Fi name to a background app if location is allowed all the time. Without it the azan stays silent when you are away, and may also stay silent at home after rejoining your network.</string>
-    <string name="settings_bg_location_grant">Allow all the time</string>
-    <string name="settings_bg_location_ok">Location is allowed all the time. Home Wi-Fi detection is exact.</string>
-    <string name="settings_bg_location_hint">Choose Location, then "Allow all the time".</string>
     <string name="settings_azan_header">Azan Sound</string>
     <string name="settings_azan_explainer">Add your own azan recordings (MP3). Fajr has its own adhan, so it can use a separate file. When no file is added, the default alarm ringtone on this device is used instead.</string>
     <string name="settings_azan_fajr_label">Fajr azan</string>

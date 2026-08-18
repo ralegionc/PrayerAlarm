@@ -37,20 +37,19 @@ class PrefsRepository(context: Context) {
         set(value) = prefs.edit().putString(KEY_HOME_SSID, value).apply()
 
     /**
-     * Last Wi-Fi SSID observed while the app was in the foreground. Android hides the SSID
-     * from background callers, so alarms compare against this remembered value instead.
+     * Router addresses of the network marked as home, comma separated.
+     *
+     * Identifying home by its IP configuration rather than its name is what lets a background
+     * alarm decide correctly without holding background location.
      */
-    var lastSeenSsid: String
-        get() = prefs.getString(KEY_LAST_SSID, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_LAST_SSID, value).apply()
+    var homeGateways: String
+        get() = prefs.getString(KEY_HOME_GATEWAYS, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_HOME_GATEWAYS, value).apply()
 
-    /**
-     * Handle of the Wi-Fi connection [lastSeenSsid] was read from. Lets a background alarm tell
-     * the same connection apart from a different one whose name it cannot read.
-     */
-    var lastSeenNetworkHandle: Long
-        get() = prefs.getLong(KEY_LAST_NETWORK, 0L)
-        set(value) = prefs.edit().putLong(KEY_LAST_NETWORK, value).apply()
+    /** DNS servers of the network marked as home, comma separated. */
+    var homeDns: String
+        get() = prefs.getString(KEY_HOME_DNS, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_HOME_DNS, value).apply()
 
     /** Cached place name for the stored coordinates, shown in the widget. */
     var cityName: String
@@ -92,8 +91,8 @@ class PrefsRepository(context: Context) {
         private const val KEY_METHOD = "calc_method"
         private const val KEY_MADHAB = "madhab"
         private const val KEY_HOME_SSID = "home_ssid"
-        private const val KEY_LAST_SSID = "last_ssid"
-        private const val KEY_LAST_NETWORK = "last_network_handle"
+        private const val KEY_HOME_GATEWAYS = "home_gateways"
+        private const val KEY_HOME_DNS = "home_dns"
         private const val KEY_CITY = "city_name"
         private const val KEY_PRE_REMINDER = "pre_reminder_minutes"
         private const val KEY_AZAN_FAJR = "azan_fajr_uri"

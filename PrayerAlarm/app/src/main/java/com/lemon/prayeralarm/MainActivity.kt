@@ -51,8 +51,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Only a foreground caller can read the SSID; remember it for background alarms.
-        WifiHelper.cacheCurrentSsid(this)
         if (prefs.hasLocation && prefs.cityName.isBlank()) {
             CityResolver.refresh(this, prefs.latitude, prefs.longitude)
         }
