@@ -33,6 +33,11 @@
     <string name="settings_use_current_wifi">Use Current Network</string>
     <string name="settings_per_prayer_header">Per-Prayer Alarm Settings</string>
 
+    <string name="settings_bg_location_title">Allow location all the time</string>
+    <string name="settings_bg_location_body">Home Wi-Fi mode needs to check which network you are on when an alarm fires. Android only reveals the Wi-Fi name to a background app if location is allowed all the time. Without it the azan stays silent when you are away, and may also stay silent at home after rejoining your network.</string>
+    <string name="settings_bg_location_grant">Allow all the time</string>
+    <string name="settings_bg_location_ok">Location is allowed all the time. Home Wi-Fi detection is exact.</string>
+    <string name="settings_bg_location_hint">Choose Location, then "Allow all the time".</string>
     <string name="settings_azan_header">Azan Sound</string>
     <string name="settings_azan_explainer">Add your own azan recordings (MP3). Fajr has its own adhan, so it can use a separate file. When no file is added, the default alarm ringtone on this device is used instead.</string>
     <string name="settings_azan_fajr_label">Fajr azan</string>

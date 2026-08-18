@@ -1,6 +1,8 @@
 package com.lemon.prayeralarm
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +14,7 @@ import android.widget.AdapterView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.lemon.prayeralarm.databinding.ActivitySettingsBinding
 import com.lemon.prayeralarm.databinding.ItemPrayerSettingsRowBinding
 import java.time.LocalDate
@@ -22,6 +25,18 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
     private lateinit var prefs: PrefsRepository
     private val rowBindings = mutableMapOf<Prayer, ItemPrayerSettingsRowBinding>()
+
+    private val requestBackgroundLocation =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                Toast.makeText(this, R.string.settings_bg_location_ok, Toast.LENGTH_LONG).show()
+            } else {
+                // From Android 11 the system stops showing this prompt, so the only remaining
+                // route to "Allow all the time" is the app's own settings page.
+                openAppDetails()
+            }
+            refreshBackgroundLocationCard()
+        }
 
     private val pickFajrAzan =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -47,7 +62,9 @@ class SettingsActivity : AppCompatActivity() {
         setupPerPrayerRows()
         setupExactAlarmWarning()
         binding.buttonSaveSettings.setOnClickListener { saveAll() }
+        binding.buttonGrantBgLocation.setOnClickListener { requestBackgroundLocationAccess() }
         refreshComputedTimes()
+        refreshBackgroundLocationCard()
     }
 
     override fun onResume() {
@@ -60,6 +77,7 @@ class SettingsActivity : AppCompatActivity() {
         )
         setupExactAlarmWarning()
         refreshComputedTimes()
+        refreshBackgroundLocationCard()
     }
 
     /**
@@ -197,6 +215,7 @@ class SettingsActivity : AppCompatActivity() {
             rowBinding.rowModeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
                     refreshComputedTimes()
+                    refreshBackgroundLocationCard()
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
@@ -240,6 +259,52 @@ class SettingsActivity : AppCompatActivity() {
         }
         rescheduleAlarms()
         PrayerWidgetProvider.refreshAll(this)
+    }
+
+    /**
+     * True when the Wi-Fi name is readable from a background alarm.
+     *
+     * Below Android 10 there is no separate background permission and the foreground grant is
+     * enough, so nothing needs asking for.
+     */
+    private fun hasBackgroundLocation(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+    /** Whether any prayer is set to the mode that actually depends on knowing the network. */
+    private fun usesHomeWifiMode(): Boolean = rowBindings.values.any {
+        AlarmMode.fromIndex(it.rowModeSpinner.selectedItemPosition) == AlarmMode.LOUD_HOME_WIFI_ONLY
+    }
+
+    /** The prompt only appears when home Wi-Fi mode is in use and the grant is still missing. */
+    private fun refreshBackgroundLocationCard() {
+        val needed = usesHomeWifiMode() && !hasBackgroundLocation()
+        binding.cardBgLocation.visibility =
+            if (needed) android.view.View.VISIBLE else android.view.View.GONE
+    }
+
+    private fun requestBackgroundLocationAccess() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Background access cannot be granted before foreground access exists.
+            openAppDetails()
+            return
+        }
+        requestBackgroundLocation.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+    }
+
+    private fun openAppDetails() {
+        Toast.makeText(this, R.string.settings_bg_location_hint, Toast.LENGTH_LONG).show()
+        startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
+        )
     }
 
     private fun saveAll() {
