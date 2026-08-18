@@ -44,6 +44,14 @@ class PrefsRepository(context: Context) {
         get() = prefs.getString(KEY_LAST_SSID, "") ?: ""
         set(value) = prefs.edit().putString(KEY_LAST_SSID, value).apply()
 
+    /**
+     * Handle of the Wi-Fi connection [lastSeenSsid] was read from. Lets a background alarm tell
+     * the same connection apart from a different one whose name it cannot read.
+     */
+    var lastSeenNetworkHandle: Long
+        get() = prefs.getLong(KEY_LAST_NETWORK, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_NETWORK, value).apply()
+
     /** Cached place name for the stored coordinates, shown in the widget. */
     var cityName: String
         get() = prefs.getString(KEY_CITY, "") ?: ""
@@ -85,6 +93,7 @@ class PrefsRepository(context: Context) {
         private const val KEY_MADHAB = "madhab"
         private const val KEY_HOME_SSID = "home_ssid"
         private const val KEY_LAST_SSID = "last_ssid"
+        private const val KEY_LAST_NETWORK = "last_network_handle"
         private const val KEY_CITY = "city_name"
         private const val KEY_PRE_REMINDER = "pre_reminder_minutes"
         private const val KEY_AZAN_FAJR = "azan_fajr_uri"
