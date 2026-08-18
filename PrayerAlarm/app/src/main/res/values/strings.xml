@@ -63,10 +63,7 @@
     <string name="notification_pre_title">%1$s in %2$d min</string>
     <string name="notification_pre_text">Prayer time is coming up</string>
     <string name="settings_pre_reminder">Remind me before prayer (minutes, 0 = off)</string>
-    <string name="widget_next_prayer">%1$s  %2$s</string>
-    <string name="widget_countdown">in %1$s</string>
-    <string name="widget_ends_in">%1$s ends in</string>
-    <string name="widget_starts_in">%1$s in</string>
+    <string name="widget_time_ends">Time Ends</string>
     <string name="widget_no_location">Open app to set location</string>
     <string name="notification_playing_title">%1$s — It is time to pray</string>
     <string name="notification_playing_text">Tap to open, or Dismiss to stop the azan</string>

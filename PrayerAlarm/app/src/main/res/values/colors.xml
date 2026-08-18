@@ -8,4 +8,11 @@
     <color name="on_surface">#F2F2F0</color>
     <color name="muted">#9BB3A9</color>
     <color name="alarm_bg">#0A1512</color>
+
+    <color name="widget_header">#37714E</color>
+    <color name="widget_footer">#1E2422</color>
+    <color name="widget_on_header">#FFFFFF</color>
+    <color name="widget_on_header_dim">#CFE6D8</color>
+    <color name="widget_highlight">#8FE3AE</color>
+    <color name="widget_on_footer">#D6DEDA</color>
 </resources>

@@ -1,27 +1,33 @@
 package com.lemon.prayeralarm
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.os.SystemClock
+import android.graphics.Typeface
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.StyleSpan
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.chrono.HijrahDate
 import java.time.format.DateTimeFormatter
 
 /**
- * Home-screen widget: the day's prayer times, sunrise, both calendar dates, the current
- * location, a live clock, and a countdown to the end of the current prayer window.
+ * Home-screen widget: a live clock, both calendar dates, the resolved city, the time the
+ * current prayer window ends, and a strip of the day's times with the active prayer picked out.
  *
- * The clock and the countdown are a TextClock and a count-down Chronometer, so they tick on
- * their own. Only the date-dependent text needs redrawing, which keeps the widget cheap: it
- * refreshes when alarms are rescheduled, when the app is opened, and on the system interval.
+ * The clock is a TextClock so it ticks unattended. Everything else changes only when a prayer
+ * window turns over, so instead of polling, the widget schedules a single refresh for the exact
+ * moment the current window closes.
  */
 class PrayerWidgetProvider : AppWidgetProvider() {
 
@@ -33,23 +39,44 @@ class PrayerWidgetProvider : AppWidgetProvider() {
         for (id in appWidgetIds) {
             updateWidget(context, appWidgetManager, id)
         }
+        scheduleBoundaryRefresh(context)
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_REFRESH) {
+            refreshAll(context)
+        }
+    }
+
+    override fun onDisabled(context: Context) {
+        super.onDisabled(context)
+        // Last widget removed; stop waking up for it.
+        alarmManager(context).cancel(refreshIntent(context))
     }
 
     companion object {
 
-        private val TIME = DateTimeFormatter.ofPattern("h:mm a")
-        private val GREGORIAN = DateTimeFormatter.ofPattern("EEE d MMM yyyy")
-        private val HIJRI = DateTimeFormatter.ofPattern("d MMMM yyyy")
+        private const val ACTION_REFRESH = "com.lemon.prayeralarm.ACTION_WIDGET_REFRESH"
+        private const val REQUEST_CODE_REFRESH = 5300
 
-        private val TIME_VIEW_IDS = intArrayOf(
-            R.id.widgetFajr, R.id.widgetSunrise, R.id.widgetDhuhr,
-            R.id.widgetAsr, R.id.widgetMaghrib, R.id.widgetIsha
+        private val TIME = DateTimeFormatter.ofPattern("h:mm a")
+        private val GREGORIAN = DateTimeFormatter.ofPattern("MMMM d, yyyy")
+        private val HIJRI = DateTimeFormatter.ofPattern("MMMM d, yyyy")
+
+        /** Label view, time view, and the prayer each column stands for. */
+        private val COLUMNS = listOf(
+            Triple(R.id.widgetFajrLabel, R.id.widgetFajr, Prayer.FAJR),
+            Triple(R.id.widgetSunriseLabel, R.id.widgetSunrise, null),
+            Triple(R.id.widgetDhuhrLabel, R.id.widgetDhuhr, Prayer.DHUHR),
+            Triple(R.id.widgetAsrLabel, R.id.widgetAsr, Prayer.ASR),
+            Triple(R.id.widgetMaghribLabel, R.id.widgetMaghrib, Prayer.MAGHRIB),
+            Triple(R.id.widgetIshaLabel, R.id.widgetIsha, Prayer.ISHA)
         )
 
-        /**
-         * Redraws every placed widget. Safe when none exist, since the id array is then
-         * empty, so schedulers can call it unconditionally.
-         */
+        /** Marks the sunrise column, which is informational rather than a prayer. */
+        private const val SUNRISE_COLUMN = 1
+
         fun refreshAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context) ?: return
             val ids = manager.getAppWidgetIds(
@@ -58,6 +85,7 @@ class PrayerWidgetProvider : AppWidgetProvider() {
             for (id in ids) {
                 updateWidget(context, manager, id)
             }
+            if (ids.isNotEmpty()) scheduleBoundaryRefresh(context)
         }
 
         private fun updateWidget(context: Context, manager: AppWidgetManager, id: Int) {
@@ -73,7 +101,8 @@ class PrayerWidgetProvider : AppWidgetProvider() {
             )
 
             val today = LocalDate.now()
-            views.setTextViewText(R.id.widgetDates, datesText(today))
+            views.setTextViewText(R.id.widgetGregorian, today.format(GREGORIAN))
+            views.setTextViewText(R.id.widgetHijri, hijriText(today))
 
             val times = AlarmScheduler.timesForDate(context, today)
             val raw = AlarmScheduler.rawTimesForDate(context, today)
@@ -83,101 +112,158 @@ class PrayerWidgetProvider : AppWidgetProvider() {
                     R.id.widgetCity,
                     context.getString(R.string.widget_no_location)
                 )
-                for (viewId in TIME_VIEW_IDS) {
-                    views.setTextViewText(viewId, "")
+                views.setTextViewText(R.id.widgetEndsTime, "")
+                for ((labelId, timeId, _) in COLUMNS) {
+                    views.setTextViewText(timeId, "")
+                    views.setTextColor(labelId, color(context, R.color.widget_on_footer))
                 }
-                clearCountdown(views)
                 manager.updateAppWidget(id, views)
                 return
             }
 
             views.setTextViewText(R.id.widgetCity, CityResolver.label(context))
-            views.setTextViewText(R.id.widgetFajr, times.getValue(Prayer.FAJR).format(TIME))
-            views.setTextViewText(R.id.widgetSunrise, raw.sunrise.format(TIME))
-            views.setTextViewText(R.id.widgetDhuhr, times.getValue(Prayer.DHUHR).format(TIME))
-            views.setTextViewText(R.id.widgetAsr, times.getValue(Prayer.ASR).format(TIME))
-            views.setTextViewText(R.id.widgetMaghrib, times.getValue(Prayer.MAGHRIB).format(TIME))
-            views.setTextViewText(R.id.widgetIsha, times.getValue(Prayer.ISHA).format(TIME))
 
-            val now = LocalDateTime.now()
-            val window = currentWindow(context, now)
-            if (window == null) {
-                clearCountdown(views)
-            } else {
-                val (label, endsAt) = window
-                views.setTextViewText(R.id.widgetEndsLabel, label)
-                val remaining = Duration.between(now, endsAt).toMillis().coerceAtLeast(0L)
-                // A base in the future plus count-down mode makes the Chronometer tick itself,
-                // so the timer stays live without waking the app every minute.
-                views.setChronometer(
-                    R.id.widgetCountdown,
-                    SystemClock.elapsedRealtime() + remaining,
-                    null,
-                    true
+            val values = listOf(
+                times.getValue(Prayer.FAJR),
+                raw.sunrise,
+                times.getValue(Prayer.DHUHR),
+                times.getValue(Prayer.ASR),
+                times.getValue(Prayer.MAGHRIB),
+                times.getValue(Prayer.ISHA)
+            )
+
+            val active = activeColumn(context, LocalDateTime.now())
+            val normal = color(context, R.color.widget_on_footer)
+            val highlight = color(context, R.color.widget_highlight)
+
+            COLUMNS.forEachIndexed { index, (labelId, timeId, prayer) ->
+                val isActive = index == active
+                val label = if (prayer == null) {
+                    context.getString(R.string.prayer_sunrise)
+                } else {
+                    NotificationHelper.prayerName(context, prayer)
+                }
+                views.setTextViewText(labelId, if (isActive) bold(label) else label)
+                views.setTextViewText(
+                    timeId,
+                    values[index].format(TIME).let { if (isActive) bold(it) else it }
                 )
-                views.setChronometerCountDown(R.id.widgetCountdown, true)
+                views.setTextColor(labelId, if (isActive) highlight else normal)
+                views.setTextColor(timeId, if (isActive) highlight else normal)
             }
+
+            val endsAt = windowEnd(context, LocalDateTime.now())
+            views.setTextViewText(
+                R.id.widgetEndsTime,
+                endsAt?.toLocalTime()?.format(TIME) ?: ""
+            )
 
             manager.updateAppWidget(id, views)
         }
 
-        private fun clearCountdown(views: RemoteViews) {
-            views.setTextViewText(R.id.widgetEndsLabel, "")
-            views.setChronometer(R.id.widgetCountdown, SystemClock.elapsedRealtime(), null, false)
+        private fun bold(text: String): CharSequence = SpannableString(text).apply {
+            setSpan(StyleSpan(Typeface.BOLD), 0, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
 
-        private fun datesText(today: LocalDate): String = try {
-            today.format(GREGORIAN) + "   " + HijrahDate.from(today).format(HIJRI) + " AH"
+        private fun color(context: Context, res: Int) = ContextCompat.getColor(context, res)
+
+        private fun hijriText(today: LocalDate): String = try {
+            HijrahDate.from(today).format(HIJRI) + " AH"
         } catch (e: Exception) {
-            today.format(GREGORIAN)
+            ""
         }
 
         /**
-         * The prayer window [now] falls inside, as a label and the instant it ends.
-         *
-         * Fajr closes at sunrise rather than at Dhuhr, and the stretch between sunrise and
-         * Dhuhr belongs to no prayer at all, so that one counts down to Dhuhr beginning
-         * instead of to a window ending.
+         * Islamic midnight: the midpoint between Maghrib and the following Fajr, which is the
+         * preferred close of the Isha window rather than clock midnight.
          */
-        private fun currentWindow(
-            context: Context,
-            now: LocalDateTime
-        ): Pair<String, LocalDateTime>? {
-            val today = now.toLocalDate()
-            val times = AlarmScheduler.timesForDate(context, today) ?: return null
-            val raw = AlarmScheduler.rawTimesForDate(context, today) ?: return null
+        private fun islamicMidnight(
+            maghrib: LocalDateTime,
+            nextFajr: LocalDateTime
+        ): LocalDateTime = maghrib.plusMinutes(Duration.between(maghrib, nextFajr).toMinutes() / 2)
 
-            fun at(time: LocalTime) = LocalDateTime.of(today, time)
-            fun ends(prayer: Prayer) = context.getString(
-                R.string.widget_ends_in,
-                NotificationHelper.prayerName(context, prayer)
-            )
-
-            val fajr = at(times.getValue(Prayer.FAJR))
-            val sunrise = at(raw.sunrise)
-            val dhuhr = at(times.getValue(Prayer.DHUHR))
-            val asr = at(times.getValue(Prayer.ASR))
-            val maghrib = at(times.getValue(Prayer.MAGHRIB))
-            val isha = at(times.getValue(Prayer.ISHA))
-
+        /** Index into [COLUMNS] of the prayer currently in effect, or -1 if unknown. */
+        private fun activeColumn(context: Context, now: LocalDateTime): Int {
+            val b = boundaries(context, now.toLocalDate()) ?: return -1
             return when {
-                // Before dawn we are still inside last night's Isha window.
-                now.isBefore(fajr) -> ends(Prayer.ISHA) to fajr
-                now.isBefore(sunrise) -> ends(Prayer.FAJR) to sunrise
-                now.isBefore(dhuhr) -> context.getString(
-                    R.string.widget_starts_in,
-                    NotificationHelper.prayerName(context, Prayer.DHUHR)
-                ) to dhuhr
-                now.isBefore(asr) -> ends(Prayer.DHUHR) to asr
-                now.isBefore(maghrib) -> ends(Prayer.ASR) to maghrib
-                now.isBefore(isha) -> ends(Prayer.MAGHRIB) to isha
-                else -> {
-                    val tomorrow = AlarmScheduler.timesForDate(context, today.plusDays(1))
-                        ?: return null
-                    ends(Prayer.ISHA) to
-                        LocalDateTime.of(today.plusDays(1), tomorrow.getValue(Prayer.FAJR))
-                }
+                now.isBefore(b.fajr) -> COLUMNS.indexOfFirst { it.third == Prayer.ISHA }
+                now.isBefore(b.sunrise) -> 0
+                now.isBefore(b.dhuhr) -> SUNRISE_COLUMN
+                now.isBefore(b.asr) -> 2
+                now.isBefore(b.maghrib) -> 3
+                now.isBefore(b.isha) -> 4
+                else -> 5
             }
         }
+
+        /** When the currently active window closes. */
+        private fun windowEnd(context: Context, now: LocalDateTime): LocalDateTime? {
+            val b = boundaries(context, now.toLocalDate()) ?: return null
+            return when {
+                // Before dawn we are still inside last night's Isha, which runs out at Fajr.
+                now.isBefore(b.fajr) -> b.fajr
+                now.isBefore(b.sunrise) -> b.sunrise
+                now.isBefore(b.dhuhr) -> b.dhuhr
+                now.isBefore(b.asr) -> b.asr
+                now.isBefore(b.maghrib) -> b.maghrib
+                now.isBefore(b.isha) -> b.isha
+                else -> b.nextFajr?.let { islamicMidnight(b.maghrib, it) }
+            }
+        }
+
+        private class Boundaries(
+            val fajr: LocalDateTime,
+            val sunrise: LocalDateTime,
+            val dhuhr: LocalDateTime,
+            val asr: LocalDateTime,
+            val maghrib: LocalDateTime,
+            val isha: LocalDateTime,
+            val nextFajr: LocalDateTime?
+        )
+
+        private fun boundaries(context: Context, today: LocalDate): Boundaries? {
+            val times = AlarmScheduler.timesForDate(context, today) ?: return null
+            val raw = AlarmScheduler.rawTimesForDate(context, today) ?: return null
+            fun at(time: LocalTime) = LocalDateTime.of(today, time)
+            val tomorrow = AlarmScheduler.timesForDate(context, today.plusDays(1))
+            return Boundaries(
+                fajr = at(times.getValue(Prayer.FAJR)),
+                sunrise = at(raw.sunrise),
+                dhuhr = at(times.getValue(Prayer.DHUHR)),
+                asr = at(times.getValue(Prayer.ASR)),
+                maghrib = at(times.getValue(Prayer.MAGHRIB)),
+                isha = at(times.getValue(Prayer.ISHA)),
+                nextFajr = tomorrow?.let {
+                    LocalDateTime.of(today.plusDays(1), it.getValue(Prayer.FAJR))
+                }
+            )
+        }
+
+        /**
+         * Wakes the widget once, exactly when the current window closes, instead of polling.
+         * The system's own 30-minute refresh would otherwise leave the highlight and the end
+         * time stale for up to half an hour after a prayer comes in.
+         */
+        private fun scheduleBoundaryRefresh(context: Context) {
+            val next = windowEnd(context, LocalDateTime.now()) ?: return
+            val millis = next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val manager = alarmManager(context)
+            val pending = refreshIntent(context)
+            try {
+                manager.setExactAndAllowWhileIdle(AlarmManager.RTC, millis, pending)
+            } catch (e: SecurityException) {
+                manager.set(AlarmManager.RTC, millis, pending)
+            }
+        }
+
+        private fun alarmManager(context: Context) =
+            context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+        private fun refreshIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE_REFRESH,
+            Intent(context, PrayerWidgetProvider::class.java).setAction(ACTION_REFRESH),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 }
