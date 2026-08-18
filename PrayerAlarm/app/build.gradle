@@ -3,6 +3,22 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Signing material comes from a gitignored keystore.properties locally, or from environment
+// variables in CI. When neither is present the release build is simply left unsigned rather
+// than failing, so anyone can still clone and build the project.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+def signingStoreFile = keystoreProperties['storeFile'] ?: System.getenv('KEYSTORE_FILE')
+def signingStorePassword = keystoreProperties['storePassword'] ?: System.getenv('KEYSTORE_PASSWORD')
+def signingKeyAlias = keystoreProperties['keyAlias'] ?: System.getenv('KEY_ALIAS')
+def signingKeyPassword = keystoreProperties['keyPassword'] ?: System.getenv('KEY_PASSWORD')
+def canSignRelease = signingStoreFile && signingStorePassword && signingKeyAlias &&
+        signingKeyPassword && file(signingStoreFile).exists()
+
 android {
     namespace "com.lemon.prayeralarm"
     compileSdk 34
@@ -15,10 +31,24 @@ android {
         versionName "1.0"
     }
 
+    signingConfigs {
+        release {
+            if (canSignRelease) {
+                storeFile file(signingStoreFile)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+            if (canSignRelease) {
+                signingConfig signingConfigs.release
+            }
         }
         debug {
             debuggable true
