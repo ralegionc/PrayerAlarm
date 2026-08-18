@@ -18,10 +18,11 @@
     <string name="qibla_no_sensor">This device has no compass sensor, so the needle cannot track. The bearing above is still correct.</string>
     <string name="qibla_calibrate">Compass accuracy is low. Move the phone in a figure-eight.</string>
     <string name="btn_refresh_location">Update Location</string>
-    <string name="label_next_prayer">Next: %1$s in %2$s</string>
     <string name="label_location">Location: %1$.4f, %2$.4f</string>
     <string name="label_hijri_date">%1$s AH</string>
     <string name="label_last_third">Last third of the night begins %1$s</string>
+    <string name="label_next_header">NEXT PRAYER</string>
+    <string name="label_in">in %1$s</string>
     <string name="label_no_location">Location not set — tap “Update Location”</string>
 
     <string name="settings_calc_method">Calculation Method</string>

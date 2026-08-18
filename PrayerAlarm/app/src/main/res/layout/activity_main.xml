@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/background"
@@ -10,58 +9,157 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:padding="18dp">
 
-        <TextView
-            android:id="@+id/textAppTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textColor="@color/on_surface"
-            android:textSize="28sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/textLocation"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="@string/label_no_location"
-            android:textColor="@color/muted"
-            android:textSize="13sp" />
+            android:background="@drawable/header_card_bg"
+            android:orientation="vertical"
+            android:padding="18dp">
 
-        <TextView
-            android:id="@+id/textHijriDate"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/muted"
-            android:textSize="13sp" />
+            <TextView
+                android:id="@+id/textAppTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textColor="@color/widget_on_header"
+                android:textSize="22sp"
+                android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/textNextPrayer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:textColor="@color/accent"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:contentDescription="@string/app_name"
+                    android:src="@drawable/ic_widget_pin" />
+
+                <TextView
+                    android:id="@+id/textLocation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="7dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="@string/label_no_location"
+                    android:textColor="@color/widget_on_header_dim"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:contentDescription="@string/app_name"
+                    android:src="@drawable/ic_widget_moon" />
+
+                <TextView
+                    android:id="@+id/textHijriDate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="7dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_on_header_dim"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:contentDescription="@string/app_name"
+                    android:src="@drawable/ic_widget_calendar" />
+
+                <TextView
+                    android:id="@+id/textGregorianDate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="7dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_on_header_dim"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:letterSpacing="0.12"
+                android:text="@string/label_next_header"
+                android:textColor="@color/widget_on_header_dim"
+                android:textSize="11sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:baselineAligned="true"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/textNextPrayerName"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_on_header"
+                    android:textSize="30sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/textNextPrayerTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/widget_highlight"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/textNextCountdown"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/widget_on_header_dim"
+                android:textSize="14sp" />
+        </LinearLayout>
 
         <LinearLayout
             android:id="@+id/prayerListContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:background="@color/surface"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/card_bg"
             android:orientation="vertical"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp" />
+            android:padding="10dp" />
 
         <TextView
             android:id="@+id/textLastThird"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="12dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
             android:textColor="@color/muted"
             android:textSize="13sp" />
 
@@ -69,33 +167,63 @@
             android:id="@+id/textExactAlarmWarning"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:padding="12dp"
-            android:background="@color/surface"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/card_bg"
+            android:padding="14dp"
             android:text="@string/settings_exact_alarm_warning"
             android:textColor="@color/accent"
+            android:textSize="13sp"
             android:visibility="gone" />
 
         <Button
             android:id="@+id/buttonUpdateLocation"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="@string/btn_refresh_location" />
+            android:layout_marginTop="18dp"
+            android:background="@drawable/btn_primary_bg"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp"
+            android:stateListAnimator="@null"
+            android:text="@string/btn_refresh_location"
+            android:textAllCaps="false"
+            android:textColor="@color/on_surface"
+            android:textSize="15sp" />
 
-        <Button
-            android:id="@+id/buttonQibla"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/btn_qibla" />
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/buttonSettings"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/btn_settings" />
+            <Button
+                android:id="@+id/buttonQibla"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/btn_secondary_bg"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:stateListAnimator="@null"
+                android:text="@string/btn_qibla"
+                android:textAllCaps="false"
+                android:textColor="@color/on_surface"
+                android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/buttonSettings"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:background="@drawable/btn_secondary_bg"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:stateListAnimator="@null"
+                android:text="@string/btn_settings"
+                android:textAllCaps="false"
+                android:textColor="@color/on_surface"
+                android:textSize="15sp" />
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>

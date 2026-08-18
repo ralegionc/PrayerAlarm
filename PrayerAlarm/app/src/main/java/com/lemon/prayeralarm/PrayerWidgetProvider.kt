@@ -104,7 +104,7 @@ class PrayerWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widgetGregorian, today.format(GREGORIAN))
             views.setTextViewText(R.id.widgetHijri, hijriText(today))
 
-            val times = AlarmScheduler.timesForDate(context, today)
+            val times = AlarmScheduler.prayerTimesForDate(context, today)
             val raw = AlarmScheduler.rawTimesForDate(context, today)
 
             if (times == null || raw == null) {
@@ -222,10 +222,10 @@ class PrayerWidgetProvider : AppWidgetProvider() {
         )
 
         private fun boundaries(context: Context, today: LocalDate): Boundaries? {
-            val times = AlarmScheduler.timesForDate(context, today) ?: return null
+            val times = AlarmScheduler.prayerTimesForDate(context, today) ?: return null
             val raw = AlarmScheduler.rawTimesForDate(context, today) ?: return null
             fun at(time: LocalTime) = LocalDateTime.of(today, time)
-            val tomorrow = AlarmScheduler.timesForDate(context, today.plusDays(1))
+            val tomorrow = AlarmScheduler.prayerTimesForDate(context, today.plusDays(1))
             return Boundaries(
                 fajr = at(times.getValue(Prayer.FAJR)),
                 sunrise = at(raw.sunrise),

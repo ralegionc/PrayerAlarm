@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.view.LayoutInflater
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.lemon.prayeralarm.databinding.ActivityMainBinding
 import com.lemon.prayeralarm.databinding.ItemPrayerRowBinding
 import java.time.Duration
@@ -92,24 +93,31 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshUi() {
         binding.textHijriDate.text = hijriDateText()
+        binding.textGregorianDate.text =
+            LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy"))
 
         if (!prefs.hasLocation) {
             binding.textLocation.text = getString(R.string.label_no_location)
-            binding.textNextPrayer.text = ""
+            binding.textNextPrayerName.text = ""
+            binding.textNextPrayerTime.text = ""
+            binding.textNextCountdown.text = ""
             binding.textLastThird.text = ""
             binding.prayerListContainer.removeAllViews()
             return
         }
 
-        binding.textLocation.text = getString(R.string.label_location, prefs.latitude, prefs.longitude)
+        // Prefer the resolved place name; CityResolver falls back to coordinates on its own.
+        binding.textLocation.text = CityResolver.label(this)
 
         val today = LocalDate.now()
-        val todayTimes = AlarmScheduler.timesForDate(this, today)
+        val todayTimes = AlarmScheduler.prayerTimesForDate(this, today)
         binding.prayerListContainer.removeAllViews()
 
         if (todayTimes != null) {
             val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
             val inflater = LayoutInflater.from(this)
+
+            val next = findNextPrayer(today, todayTimes)
 
             // Sunrise is not a prayer, but it closes the Fajr window, so it belongs in the list.
             val sunrise = AlarmScheduler.rawTimesForDate(this, today)?.sunrise
@@ -117,18 +125,20 @@ class MainActivity : AppCompatActivity() {
                 addRow(
                     inflater,
                     NotificationHelper.prayerName(this, prayer),
-                    todayTimes.getValue(prayer).format(timeFormatter)
+                    todayTimes.getValue(prayer).format(timeFormatter),
+                    highlight = prayer == next?.first
                 )
                 if (prayer == Prayer.FAJR && sunrise != null) {
                     addRow(
                         inflater,
                         getString(R.string.prayer_sunrise),
-                        sunrise.format(timeFormatter)
+                        sunrise.format(timeFormatter),
+                        highlight = false
                     )
                 }
             }
 
-            binding.textNextPrayer.text = describeNextPrayer(today, todayTimes)
+            showNextPrayer(next, timeFormatter)
             binding.textLastThird.text = lastThirdText(today, timeFormatter)
         }
 
@@ -137,11 +147,62 @@ class MainActivity : AppCompatActivity() {
         binding.textExactAlarmWarning.visibility = if (needsExactAlarmPermission) android.view.View.VISIBLE else android.view.View.GONE
     }
 
-    private fun addRow(inflater: LayoutInflater, name: String, time: String) {
+    private fun addRow(
+        inflater: LayoutInflater,
+        name: String,
+        time: String,
+        highlight: Boolean
+    ) {
         val rowBinding = ItemPrayerRowBinding.inflate(inflater, binding.prayerListContainer, false)
         rowBinding.rowPrayerName.text = name
         rowBinding.rowPrayerTime.text = time
+        if (highlight) {
+            rowBinding.rowRoot.setBackgroundResource(R.drawable.row_next_bg)
+            val tint = ContextCompat.getColor(this, R.color.widget_highlight)
+            rowBinding.rowPrayerName.setTextColor(tint)
+            rowBinding.rowPrayerTime.setTextColor(tint)
+        }
         binding.prayerListContainer.addView(rowBinding.root)
+    }
+
+    /** Fills the header block with the upcoming prayer, its time, and how long until it. */
+    private fun showNextPrayer(
+        next: Pair<Prayer, LocalDateTime>?,
+        formatter: DateTimeFormatter
+    ) {
+        if (next == null) {
+            binding.textNextPrayerName.text = ""
+            binding.textNextPrayerTime.text = ""
+            binding.textNextCountdown.text = ""
+            return
+        }
+        val (prayer, at) = next
+        binding.textNextPrayerName.text = NotificationHelper.prayerName(this, prayer)
+        binding.textNextPrayerTime.text = at.toLocalTime().format(formatter)
+        val duration = Duration.between(LocalDateTime.now(), at)
+        val hours = duration.toHours()
+        val minutes = duration.toMinutes() % 60
+        val countdown = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
+        binding.textNextCountdown.text = getString(R.string.label_in, countdown)
+    }
+
+    /** The next prayer still to come, rolling over to tomorrow's Fajr once Isha has passed. */
+    private fun findNextPrayer(
+        today: LocalDate,
+        todayTimes: Map<Prayer, java.time.LocalTime>
+    ): Pair<Prayer, LocalDateTime>? {
+        val now = LocalDateTime.now()
+        var best: Pair<Prayer, LocalDateTime>? = null
+        for (prayer in Prayer.values()) {
+            val at = LocalDateTime.of(today, todayTimes.getValue(prayer))
+            if (at.isAfter(now) && (best == null || at.isBefore(best.second))) {
+                best = prayer to at
+            }
+        }
+        if (best != null) return best
+        val tomorrow = AlarmScheduler.prayerTimesForDate(this, today.plusDays(1)) ?: return null
+        return Prayer.FAJR to
+            LocalDateTime.of(today.plusDays(1), tomorrow.getValue(Prayer.FAJR))
     }
 
     /** Today's date in the Islamic calendar, via the JDK's Umm al-Qura implementation. */
@@ -165,31 +226,6 @@ class MainActivity : AppCompatActivity() {
         if (nightMinutes <= 0) return ""
         val start = maghrib.plusMinutes(nightMinutes * 2 / 3)
         return getString(R.string.label_last_third, start.format(formatter))
-    }
-
-    private fun describeNextPrayer(today: LocalDate, todayTimes: Map<Prayer, java.time.LocalTime>): String {
-        val now = LocalDateTime.now()
-        var best: Pair<Prayer, LocalDateTime>? = null
-
-        for (prayer in Prayer.values()) {
-            val dt = LocalDateTime.of(today, todayTimes.getValue(prayer))
-            if (dt.isAfter(now) && (best == null || dt.isBefore(best!!.second))) {
-                best = prayer to dt
-            }
-        }
-
-        if (best == null) {
-            val tomorrowTimes = AlarmScheduler.timesForDate(this, today.plusDays(1)) ?: return ""
-            val dt = LocalDateTime.of(today.plusDays(1), tomorrowTimes.getValue(Prayer.FAJR))
-            best = Prayer.FAJR to dt
-        }
-
-        val (prayer, dt) = best!!
-        val duration = Duration.between(now, dt)
-        val hours = duration.toHours()
-        val minutes = duration.toMinutes() % 60
-        val countdown = if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
-        return getString(R.string.label_next_prayer, NotificationHelper.prayerName(this, prayer), countdown)
     }
 
     private fun openExactAlarmSettings() {

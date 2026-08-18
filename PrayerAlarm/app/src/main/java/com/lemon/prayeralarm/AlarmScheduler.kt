@@ -161,7 +161,21 @@ object AlarmScheduler {
         )
     }
 
-    /** Prayer times for [date], with per-prayer minute offsets already applied. */
+    /**
+     * The actual prayer times for [date], with no alarm offsets applied.
+     *
+     * This is what every screen should display. An offset delays the alarm, it does not move
+     * the prayer, so folding it into the shown time would misreport when the prayer is.
+     */
+    fun prayerTimesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime>? {
+        val times = rawTimesForDate(context, date) ?: return null
+        return Prayer.values().associateWith { rawTimeFor(it, times) }
+    }
+
+    /**
+     * Times for [date] shifted by each prayer's alarm offset. For scheduling only — use
+     * [prayerTimesForDate] for anything the user reads.
+     */
     fun timesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime>? {
         val prefs = PrefsRepository(context)
         val times = rawTimesForDate(context, date) ?: return null
