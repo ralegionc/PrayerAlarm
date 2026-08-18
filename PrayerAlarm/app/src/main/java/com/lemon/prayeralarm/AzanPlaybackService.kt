@@ -195,6 +195,9 @@ class AzanPlaybackService : Service() {
             .setContentText(getString(R.string.notification_playing_text))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            // Without this the notification defaults to PRIVATE, and a locked screen shows a
+            // redacted copy with the action buttons stripped -- exactly when they are needed.
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .addAction(R.drawable.ic_notification, getString(R.string.alarm_snooze), snoozePendingIntent)
