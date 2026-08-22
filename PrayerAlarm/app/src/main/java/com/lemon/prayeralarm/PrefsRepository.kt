@@ -78,8 +78,13 @@ class PrefsRepository(context: Context) {
         prefs.edit().putInt(KEY_OFFSET_PREFIX + prayer.storageKey, minutes).apply()
     }
 
-    fun alarmMode(prayer: Prayer): AlarmMode =
-        AlarmMode.fromIndex(prefs.getInt(KEY_MODE_PREFIX + prayer.storageKey, AlarmMode.VIBRATE_ALWAYS.index))
+    fun alarmMode(prayer: Prayer): AlarmMode {
+        // Sunrise and Tahajjud start off; nobody expects an unrequested alarm before dawn.
+        val fallback = if (prayer.isObligatory) AlarmMode.VIBRATE_ALWAYS else AlarmMode.OFF
+        return AlarmMode.fromIndex(
+            prefs.getInt(KEY_MODE_PREFIX + prayer.storageKey, fallback.index)
+        )
+    }
 
     fun setAlarmMode(prayer: Prayer, mode: AlarmMode) {
         prefs.edit().putInt(KEY_MODE_PREFIX + prayer.storageKey, mode.index).apply()

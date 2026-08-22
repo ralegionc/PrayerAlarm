@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -169,7 +170,10 @@ object AlarmScheduler {
      */
     fun prayerTimesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime>? {
         val times = rawTimesForDate(context, date) ?: return null
-        return Prayer.values().associateWith { rawTimeFor(it, times) }
+        // Tahajjud belongs to a night rather than a day, so it has no place in a per-day map.
+        return Prayer.values()
+            .filter { it != Prayer.TAHAJJUD }
+            .associateWith { rawTimeFor(it, times) }
     }
 
     /**
@@ -179,9 +183,11 @@ object AlarmScheduler {
     fun timesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime>? {
         val prefs = PrefsRepository(context)
         val times = rawTimesForDate(context, date) ?: return null
-        return Prayer.values().associateWith { prayer ->
-            rawTimeFor(prayer, times).plusMinutes(prefs.offsetMinutes(prayer).toLong())
-        }
+        return Prayer.values()
+            .filter { it != Prayer.TAHAJJUD }
+            .associateWith { prayer ->
+                rawTimeFor(prayer, times).plusMinutes(prefs.offsetMinutes(prayer).toLong())
+            }
     }
 
     private fun nextOccurrence(
@@ -196,21 +202,77 @@ object AlarmScheduler {
         val today = LocalDate.now()
         for (dayOffset in 0..3) {
             val date = today.plusDays(dayOffset.toLong())
-            val times = PrayerTimesCalculator.calculate(date, lat, lng, tzHoursFor(date), method, madhab)
-            val adjusted = rawTimeFor(prayer, times).plusMinutes(offsetMinutes.toLong())
-            val candidate = LocalDateTime.of(date, adjusted)
+            val base = baseDateTime(prayer, date, lat, lng, method, madhab) ?: continue
+            // A negative offset moves the alarm before the prayer, which is why this compares
+            // the adjusted time rather than the prayer time itself.
+            val candidate = base.plusMinutes(offsetMinutes.toLong())
             if (candidate.isAfter(now)) return candidate
         }
         return null
     }
 
+    /**
+     * When [prayer] falls on [date], before any offset.
+     *
+     * Tahajjud is the odd one out: it is two thirds of the way from Maghrib to the following
+     * Fajr, so it belongs to a night rather than to a day and cannot be read off a single day's
+     * times the way the others can.
+     */
+    private fun baseDateTime(
+        prayer: Prayer,
+        date: LocalDate,
+        lat: Double,
+        lng: Double,
+        method: CalculationMethod,
+        madhab: Madhab
+    ): LocalDateTime? {
+        if (prayer == Prayer.TAHAJJUD) {
+            val tonight = PrayerTimesCalculator.calculate(date, lat, lng, tzHoursFor(date), method, madhab)
+            val next = date.plusDays(1)
+            val tomorrow = PrayerTimesCalculator.calculate(next, lat, lng, tzHoursFor(next), method, madhab)
+            val maghrib = LocalDateTime.of(date, tonight.maghrib)
+            val fajr = LocalDateTime.of(next, tomorrow.fajr)
+            val nightMinutes = Duration.between(maghrib, fajr).toMinutes()
+            if (nightMinutes <= 0) return null
+            return maghrib.plusMinutes(nightMinutes * 2 / 3)
+        }
+        val times = PrayerTimesCalculator.calculate(date, lat, lng, tzHoursFor(date), method, madhab)
+        return LocalDateTime.of(date, rawTimeFor(prayer, times))
+    }
+
+    /**
+     * The time [prayer] falls at on [date] under the given settings, before offsets. Lets the
+     * settings screen preview a choice the user has not saved yet.
+     */
+    fun previewBaseTime(
+        context: Context,
+        prayer: Prayer,
+        date: LocalDate,
+        methodIndex: Int,
+        madhabIndex: Int
+    ): LocalTime? {
+        val prefs = PrefsRepository(context)
+        if (!prefs.hasLocation) return null
+        return baseDateTime(
+            prayer,
+            date,
+            prefs.latitude,
+            prefs.longitude,
+            CalculationMethod.forIndex(methodIndex),
+            Madhab.fromIndex(madhabIndex)
+        )?.toLocalTime()
+    }
+
     /** The astronomical time for one prayer, before any user offset. */
     fun rawTimeFor(prayer: Prayer, times: PrayerTimesCalculator.Times): LocalTime = when (prayer) {
         Prayer.FAJR -> times.fajr
+        Prayer.SUNRISE -> times.sunrise
         Prayer.DHUHR -> times.dhuhr
         Prayer.ASR -> times.asr
         Prayer.MAGHRIB -> times.maghrib
         Prayer.ISHA -> times.isha
+        // Never reached: baseDateTime intercepts Tahajjud, which needs two days of times.
+        Prayer.TAHAJJUD -> times.isha
     }
 
     private fun buildPreReminderIntent(context: Context, prayer: Prayer): PendingIntent {

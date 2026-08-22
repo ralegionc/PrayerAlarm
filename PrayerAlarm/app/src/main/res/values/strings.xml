@@ -5,6 +5,7 @@
 
     <string name="prayer_fajr">Fajr</string>
     <string name="prayer_sunrise">Sunrise</string>
+    <string name="prayer_tahajjud">Tahajjud</string>
     <string name="prayer_dhuhr">Dhuhr</string>
     <string name="prayer_asr">Asr</string>
     <string name="prayer_maghrib">Maghrib</string>
@@ -48,7 +49,7 @@
     <string name="settings_azan_none_ringtone">Not set — your alarm ringtone will be used</string>
     <string name="settings_azan_none_shared">Not set — the shared azan above will be used</string>
     <string name="settings_azan_unreadable">Could not read that file. Try another, or copy it into device storage first.</string>
-    <string name="settings_offset_label">Ring this many minutes later</string>
+    <string name="settings_offset_label">Minutes later (use a minus sign for earlier)</string>
     <string name="settings_prayer_time_label">Prayer time</string>
     <string name="settings_alarm_at">Alarm rings at %1$s</string>
     <string name="settings_alarm_off">Alarm off</string>

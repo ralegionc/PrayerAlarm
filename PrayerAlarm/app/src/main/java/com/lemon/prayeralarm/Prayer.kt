@@ -1,15 +1,27 @@
 package com.lemon.prayeralarm
 
-/** The five daily prayers that can have an alarm. Sunrise is informational only. */
-enum class Prayer(val storageKey: String) {
-    FAJR("fajr"),
-    DHUHR("dhuhr"),
-    ASR("asr"),
-    MAGHRIB("maghrib"),
-    ISHA("isha");
+/**
+ * Everything that can carry an alarm.
+ *
+ * Sunrise and Tahajjud are not obligatory prayers, but both are worth waking for: sunrise
+ * closes the Fajr window, and Tahajjud marks the last third of the night. [isObligatory]
+ * separates them so the main screen and the next-prayer countdown can ignore them while the
+ * settings screen still offers each one an alarm.
+ */
+enum class Prayer(val storageKey: String, val isObligatory: Boolean) {
+    FAJR("fajr", true),
+    SUNRISE("sunrise", false),
+    DHUHR("dhuhr", true),
+    ASR("asr", true),
+    MAGHRIB("maghrib", true),
+    ISHA("isha", true),
+    TAHAJJUD("tahajjud", false);
 
     companion object {
         fun fromKey(key: String): Prayer? = values().firstOrNull { it.storageKey == key }
+
+        /** The five daily prayers, for anything that should not list sunrise or Tahajjud. */
+        fun obligatory(): List<Prayer> = values().filter { it.isObligatory }
     }
 }
 

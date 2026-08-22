@@ -124,5 +124,7 @@ object NotificationHelper {
         Prayer.ASR -> context.getString(R.string.prayer_asr)
         Prayer.MAGHRIB -> context.getString(R.string.prayer_maghrib)
         Prayer.ISHA -> context.getString(R.string.prayer_isha)
+        Prayer.SUNRISE -> context.getString(R.string.prayer_sunrise)
+        Prayer.TAHAJJUD -> context.getString(R.string.prayer_tahajjud)
     }
 }

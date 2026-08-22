@@ -117,23 +117,16 @@ class MainActivity : AppCompatActivity() {
 
             val next = findNextPrayer(today, todayTimes)
 
-            // Sunrise is not a prayer, but it closes the Fajr window, so it belongs in the list.
-            val sunrise = AlarmScheduler.rawTimesForDate(this, today)?.sunrise
+            // Sunrise is in the list because it closes the Fajr window. Tahajjud is not: it
+            // belongs to the coming night, and already has its own line beneath the list.
             for (prayer in Prayer.values()) {
+                if (prayer == Prayer.TAHAJJUD) continue
                 addRow(
                     inflater,
                     NotificationHelper.prayerName(this, prayer),
                     todayTimes.getValue(prayer).format(timeFormatter),
                     highlight = prayer == next?.first
                 )
-                if (prayer == Prayer.FAJR && sunrise != null) {
-                    addRow(
-                        inflater,
-                        getString(R.string.prayer_sunrise),
-                        sunrise.format(timeFormatter),
-                        highlight = false
-                    )
-                }
             }
 
             showNextPrayer(next, timeFormatter)
@@ -191,7 +184,8 @@ class MainActivity : AppCompatActivity() {
     ): Pair<Prayer, LocalDateTime>? {
         val now = LocalDateTime.now()
         var best: Pair<Prayer, LocalDateTime>? = null
-        for (prayer in Prayer.values()) {
+        // Only the five daily prayers count as "next prayer"; sunrise is not one.
+        for (prayer in Prayer.obligatory()) {
             val at = LocalDateTime.of(today, todayTimes.getValue(prayer))
             if (at.isAfter(now) && (best == null || at.isBefore(best.second))) {
                 best = prayer to at

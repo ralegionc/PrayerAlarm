@@ -286,19 +286,17 @@ class SettingsActivity : AppCompatActivity() {
      * and an offset can be lined up against the real prayer time before it is committed.
      */
     private fun refreshComputedTimes() {
-        val times = AlarmScheduler.previewTimes(
-            this,
-            LocalDate.now(),
-            binding.spinnerMethod.selectedItemPosition,
-            binding.spinnerMadhab.selectedItemPosition
-        )
+        val methodIndex = binding.spinnerMethod.selectedItemPosition
+        val madhabIndex = binding.spinnerMadhab.selectedItemPosition
         for ((prayer, rowBinding) in rowBindings) {
-            if (times == null) {
+            val raw = AlarmScheduler.previewBaseTime(
+                this, prayer, LocalDate.now(), methodIndex, madhabIndex
+            )
+            if (raw == null) {
                 rowBinding.rowPrayerTime.text = ""
                 rowBinding.rowAlarmTime.text = getString(R.string.settings_no_time)
                 continue
             }
-            val raw = AlarmScheduler.rawTimeFor(prayer, times)
             rowBinding.rowPrayerTime.text = raw.format(TIME_FORMAT)
             val mode = AlarmMode.fromIndex(rowBinding.rowModeSpinner.selectedItemPosition)
             rowBinding.rowAlarmTime.text = if (mode == AlarmMode.OFF) {
