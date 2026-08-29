@@ -74,8 +74,11 @@ class PrayerWidgetProvider : AppWidgetProvider() {
             Triple(R.id.widgetIshaLabel, R.id.widgetIsha, Prayer.ISHA)
         )
 
-        /** Marks the sunrise column, which is informational rather than a prayer. */
-        private const val SUNRISE_COLUMN = 1
+        private const val FAJR_COLUMN = 0
+        private const val DHUHR_COLUMN = 2
+        private const val ASR_COLUMN = 3
+        private const val MAGHRIB_COLUMN = 4
+        private const val ISHA_COLUMN = 5
 
         fun refreshAll(context: Context) {
             val manager = AppWidgetManager.getInstance(context) ?: return
@@ -132,7 +135,8 @@ class PrayerWidgetProvider : AppWidgetProvider() {
                 times.getValue(Prayer.ISHA)
             )
 
-            val active = activeColumn(context, LocalDateTime.now())
+            val state = widgetState(context, LocalDateTime.now())
+            val active = state?.column ?: -1
             val normal = color(context, R.color.widget_on_footer)
             val highlight = color(context, R.color.widget_highlight)
 
@@ -152,10 +156,13 @@ class PrayerWidgetProvider : AppWidgetProvider() {
                 views.setTextColor(timeId, if (isActive) highlight else normal)
             }
 
-            val endsAt = windowEnd(context, LocalDateTime.now())
+            views.setTextViewText(
+                R.id.widgetEndsLabel,
+                context.getString(state?.labelRes ?: R.string.widget_time_ends)
+            )
             views.setTextViewText(
                 R.id.widgetEndsTime,
-                endsAt?.toLocalTime()?.format(TIME) ?: ""
+                state?.at?.toLocalTime()?.format(TIME) ?: ""
             )
 
             manager.updateAppWidget(id, views)
@@ -182,32 +189,30 @@ class PrayerWidgetProvider : AppWidgetProvider() {
             nextFajr: LocalDateTime
         ): LocalDateTime = maghrib.plusMinutes(Duration.between(maghrib, nextFajr).toMinutes() / 2)
 
-        /** Index into [COLUMNS] of the prayer currently in effect, or -1 if unknown. */
-        private fun activeColumn(context: Context, now: LocalDateTime): Int {
-            val b = boundaries(context, now.toLocalDate()) ?: return -1
-            return when {
-                now.isBefore(b.fajr) -> COLUMNS.indexOfFirst { it.third == Prayer.ISHA }
-                now.isBefore(b.sunrise) -> 0
-                now.isBefore(b.dhuhr) -> SUNRISE_COLUMN
-                now.isBefore(b.asr) -> 2
-                now.isBefore(b.maghrib) -> 3
-                now.isBefore(b.isha) -> 4
-                else -> 5
-            }
-        }
+        /**
+         * Which column to highlight, what to call the time beside it, and when that time is.
+         *
+         * Between sunrise and Dhuhr no prayer is due at all. Treating that stretch like the
+         * others would highlight sunrise and announce that it "ends" at Dhuhr, which is not a
+         * thing that happens. That gap instead points at the prayer about to begin.
+         */
+        private class WidgetState(val column: Int, val labelRes: Int, val at: LocalDateTime)
 
-        /** When the currently active window closes. */
-        private fun windowEnd(context: Context, now: LocalDateTime): LocalDateTime? {
+        private fun widgetState(context: Context, now: LocalDateTime): WidgetState? {
             val b = boundaries(context, now.toLocalDate()) ?: return null
+            val ends = R.string.widget_time_ends
             return when {
                 // Before dawn we are still inside last night's Isha, which runs out at Fajr.
-                now.isBefore(b.fajr) -> b.fajr
-                now.isBefore(b.sunrise) -> b.sunrise
-                now.isBefore(b.dhuhr) -> b.dhuhr
-                now.isBefore(b.asr) -> b.asr
-                now.isBefore(b.maghrib) -> b.maghrib
-                now.isBefore(b.isha) -> b.isha
-                else -> b.nextFajr?.let { islamicMidnight(b.maghrib, it) }
+                now.isBefore(b.fajr) -> WidgetState(ISHA_COLUMN, ends, b.fajr)
+                now.isBefore(b.sunrise) -> WidgetState(FAJR_COLUMN, ends, b.sunrise)
+                now.isBefore(b.dhuhr) ->
+                    WidgetState(DHUHR_COLUMN, R.string.widget_starts_at, b.dhuhr)
+                now.isBefore(b.asr) -> WidgetState(DHUHR_COLUMN, ends, b.asr)
+                now.isBefore(b.maghrib) -> WidgetState(ASR_COLUMN, ends, b.maghrib)
+                now.isBefore(b.isha) -> WidgetState(MAGHRIB_COLUMN, ends, b.isha)
+                else -> b.nextFajr?.let {
+                    WidgetState(ISHA_COLUMN, ends, islamicMidnight(b.maghrib, it))
+                }
             }
         }
 
@@ -245,7 +250,7 @@ class PrayerWidgetProvider : AppWidgetProvider() {
          * time stale for up to half an hour after a prayer comes in.
          */
         private fun scheduleBoundaryRefresh(context: Context) {
-            val next = windowEnd(context, LocalDateTime.now()) ?: return
+            val next = widgetState(context, LocalDateTime.now())?.at ?: return
             val millis = next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
             val manager = alarmManager(context)
             val pending = refreshIntent(context)

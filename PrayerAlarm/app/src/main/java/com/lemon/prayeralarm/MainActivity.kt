@@ -100,7 +100,7 @@ class MainActivity : AppCompatActivity() {
             binding.textNextPrayerTime.text = ""
             binding.textNextCountdown.text = ""
             binding.textLastThird.text = ""
-            binding.prayerListContainer.removeAllViews()
+            clearGrid()
             return
         }
 
@@ -109,26 +109,13 @@ class MainActivity : AppCompatActivity() {
 
         val today = LocalDate.now()
         val todayTimes = AlarmScheduler.prayerTimesForDate(this, today)
-        binding.prayerListContainer.removeAllViews()
 
-        if (todayTimes != null) {
+        if (todayTimes == null) {
+            clearGrid()
+        } else {
             val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
-            val inflater = LayoutInflater.from(this)
-
             val next = findNextPrayer(today, todayTimes)
-
-            // Sunrise is in the list because it closes the Fajr window. Tahajjud is not: it
-            // belongs to the coming night, and already has its own line beneath the list.
-            for (prayer in Prayer.values()) {
-                if (prayer == Prayer.TAHAJJUD) continue
-                addRow(
-                    inflater,
-                    NotificationHelper.prayerName(this, prayer),
-                    todayTimes.getValue(prayer).format(timeFormatter),
-                    highlight = prayer == next?.first
-                )
-            }
-
+            fillGrid(todayTimes, next?.first, timeFormatter)
             showNextPrayer(next, timeFormatter)
             binding.textLastThird.text = lastThirdText(today, timeFormatter)
         }
@@ -138,22 +125,41 @@ class MainActivity : AppCompatActivity() {
         binding.textExactAlarmWarning.visibility = if (needsExactAlarmPermission) android.view.View.VISIBLE else android.view.View.GONE
     }
 
-    private fun addRow(
-        inflater: LayoutInflater,
-        name: String,
-        time: String,
-        highlight: Boolean
+    /** The six grid cells, in reading order, paired with the prayer each one shows. */
+    private fun gridCells(): List<Triple<Prayer, android.view.View, Pair<android.widget.TextView, android.widget.TextView>>> =
+        listOf(
+            Triple(Prayer.FAJR, binding.cellFajr, binding.nameFajr to binding.timeFajr),
+            Triple(Prayer.SUNRISE, binding.cellSunrise, binding.nameSunrise to binding.timeSunrise),
+            Triple(Prayer.DHUHR, binding.cellDhuhr, binding.nameDhuhr to binding.timeDhuhr),
+            Triple(Prayer.ASR, binding.cellAsr, binding.nameAsr to binding.timeAsr),
+            Triple(Prayer.MAGHRIB, binding.cellMaghrib, binding.nameMaghrib to binding.timeMaghrib),
+            Triple(Prayer.ISHA, binding.cellIsha, binding.nameIsha to binding.timeIsha)
+        )
+
+    private fun fillGrid(
+        times: Map<Prayer, java.time.LocalTime>,
+        highlight: Prayer?,
+        formatter: DateTimeFormatter
     ) {
-        val rowBinding = ItemPrayerRowBinding.inflate(inflater, binding.prayerListContainer, false)
-        rowBinding.rowPrayerName.text = name
-        rowBinding.rowPrayerTime.text = time
-        if (highlight) {
-            rowBinding.rowRoot.setBackgroundResource(R.drawable.row_next_bg)
-            val tint = ContextCompat.getColor(this, R.color.widget_highlight)
-            rowBinding.rowPrayerName.setTextColor(tint)
-            rowBinding.rowPrayerTime.setTextColor(tint)
+        val muted = ContextCompat.getColor(this, R.color.muted)
+        val normal = ContextCompat.getColor(this, R.color.on_surface)
+        val tint = ContextCompat.getColor(this, R.color.widget_highlight)
+
+        for ((prayer, cell, labels) in gridCells()) {
+            val (name, time) = labels
+            time.text = times[prayer]?.format(formatter).orEmpty()
+            val isNext = prayer == highlight
+            cell.setBackgroundResource(if (isNext) R.drawable.row_next_bg else 0)
+            name.setTextColor(if (isNext) tint else muted)
+            time.setTextColor(if (isNext) tint else normal)
         }
-        binding.prayerListContainer.addView(rowBinding.root)
+    }
+
+    private fun clearGrid() {
+        for ((_, cell, labels) in gridCells()) {
+            labels.second.text = ""
+            cell.setBackgroundResource(0)
+        }
     }
 
     /** Fills the header block with the upcoming prayer, its time, and how long until it. */
