@@ -40,6 +40,9 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, QiblaActivity::class.java))
         }
         binding.buttonSettings.setOnClickListener {
+        binding.buttonDiagnostics.setOnClickListener {
+            startActivity(Intent(this, DiagnosticsActivity::class.java))
+        }
             startActivity(Intent(this, SettingsActivity::class.java))
         }
         binding.textExactAlarmWarning.setOnClickListener { openExactAlarmSettings() }

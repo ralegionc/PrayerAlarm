@@ -35,6 +35,10 @@ jobs:
       - name: Restore keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "${{ runner.temp }}/release.jks"
 
+      - name: Run unit tests
+        working-directory: PrayerAlarm
+        run: gradle testDebugUnitTest --no-daemon
+
       - name: Build signed release APK
         working-directory: PrayerAlarm
         env:

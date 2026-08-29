@@ -29,6 +29,10 @@ jobs:
         with:
           gradle-version: 8.2
 
+      - name: Run unit tests
+        working-directory: PrayerAlarm
+        run: gradle testDebugUnitTest --no-daemon
+
       - name: Build debug APK
         working-directory: PrayerAlarm
         run: gradle assembleDebug --no-daemon

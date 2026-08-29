@@ -422,4 +422,18 @@
         </LinearLayout>
 
     </LinearLayout>
+
+        <Button
+            android:id="@+id/buttonDiagnostics"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/btn_secondary_bg"
+            android:paddingTop="14dp"
+            android:paddingBottom="14dp"
+            android:stateListAnimator="@null"
+            android:text="@string/btn_diagnostics"
+            android:textAllCaps="false"
+            android:textColor="@color/on_surface"
+            android:textSize="15sp" />
 </ScrollView>

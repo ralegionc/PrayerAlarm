@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Prayer Alarm</string>
+    <string name="diagnostics_title">Alarm Status</string>
+    <string name="diagnostics_all_ok">Everything needed for alarms to fire is in place.</string>
+    <string name="diagnostics_problems">%1$d item(s) below could stop an alarm from firing.</string>
+    <string name="btn_diagnostics">Alarm Status</string>
+    <string name="diag_fix">Fix</string>
     <string name="settings_title">Settings</string>
 
     <string name="prayer_fajr">Fajr</string>
