@@ -57,6 +57,8 @@
     <string name="settings_offset_label">Minutes later (use a minus sign for earlier)</string>
     <string name="settings_prayer_time_label">Prayer time</string>
     <string name="settings_alarm_at">Alarm rings at %1$s</string>
+    <string name="settings_alarm_at_tomorrow">Alarm rings at %1$s tomorrow</string>
+    <string name="settings_alarm_at_day">Alarm rings %1$s at %2$s</string>
     <string name="settings_alarm_off">Alarm off</string>
     <string name="settings_no_time">Set your location first</string>
     <string name="settings_save">Save changes</string>

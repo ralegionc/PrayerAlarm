@@ -288,24 +288,45 @@ class SettingsActivity : AppCompatActivity() {
     private fun refreshComputedTimes() {
         val methodIndex = binding.spinnerMethod.selectedItemPosition
         val madhabIndex = binding.spinnerMadhab.selectedItemPosition
+        val today = LocalDate.now()
         for ((prayer, rowBinding) in rowBindings) {
-            val raw = AlarmScheduler.previewBaseTime(
-                this, prayer, LocalDate.now(), methodIndex, madhabIndex
-            )
-            if (raw == null) {
+            val mode = AlarmMode.fromIndex(rowBinding.rowModeSpinner.selectedItemPosition)
+            val offset = rowBinding.rowOffset.text.toString().toIntOrNull() ?: 0
+
+            if (mode == AlarmMode.OFF) {
+                // Nothing will ring, so show today's time purely as a reference point.
+                val raw = AlarmScheduler.previewBaseTime(this, prayer, today, methodIndex, madhabIndex)
+                rowBinding.rowPrayerTime.text = raw?.format(TIME_FORMAT).orEmpty()
+                rowBinding.rowAlarmTime.text = if (raw == null) {
+                    getString(R.string.settings_no_time)
+                } else {
+                    getString(R.string.settings_alarm_off)
+                }
+                continue
+            }
+
+            val ringsAt =
+                AlarmScheduler.previewNextAlarm(this, prayer, offset, methodIndex, madhabIndex)
+            if (ringsAt == null) {
                 rowBinding.rowPrayerTime.text = ""
                 rowBinding.rowAlarmTime.text = getString(R.string.settings_no_time)
                 continue
             }
-            rowBinding.rowPrayerTime.text = raw.format(TIME_FORMAT)
-            val mode = AlarmMode.fromIndex(rowBinding.rowModeSpinner.selectedItemPosition)
-            rowBinding.rowAlarmTime.text = if (mode == AlarmMode.OFF) {
-                getString(R.string.settings_alarm_off)
-            } else {
-                val offset = rowBinding.rowOffset.text.toString().toIntOrNull() ?: 0
-                getString(
-                    R.string.settings_alarm_at,
-                    raw.plusMinutes(offset.toLong()).format(TIME_FORMAT)
+
+            // Both lines describe the same upcoming occurrence, so the prayer time comes from
+            // the alarm rather than from today, which may already be hours in the past.
+            val prayerAt = ringsAt.minusMinutes(offset.toLong())
+            rowBinding.rowPrayerTime.text = prayerAt.toLocalTime().format(TIME_FORMAT)
+
+            val days = java.time.temporal.ChronoUnit.DAYS.between(today, ringsAt.toLocalDate())
+            val time = ringsAt.toLocalTime().format(TIME_FORMAT)
+            rowBinding.rowAlarmTime.text = when (days) {
+                0L -> getString(R.string.settings_alarm_at, time)
+                1L -> getString(R.string.settings_alarm_at_tomorrow, time)
+                else -> getString(
+                    R.string.settings_alarm_at_day,
+                    ringsAt.format(DAY_FORMAT),
+                    time
                 )
             }
         }
@@ -318,5 +339,6 @@ class SettingsActivity : AppCompatActivity() {
     companion object {
         private val AUDIO_MIME_TYPES = arrayOf("audio/*")
         private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
+        private val DAY_FORMAT = DateTimeFormatter.ofPattern("EEEE")
     }
 }

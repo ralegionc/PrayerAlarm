@@ -241,6 +241,36 @@ object AlarmScheduler {
     }
 
     /**
+     * The next moment an alarm for [prayer] would actually fire, under settings the user may
+     * not have saved yet.
+     *
+     * The settings screen used to compute everything from today, so once a prayer had passed it
+     * advertised a time that was already hours gone. Resolving the next occurrence instead means
+     * a row always answers the question being asked of it: when will this ring.
+     */
+    fun previewNextAlarm(
+        context: Context,
+        prayer: Prayer,
+        offsetMinutes: Int,
+        methodIndex: Int,
+        madhabIndex: Int,
+        from: LocalDateTime = LocalDateTime.now()
+    ): LocalDateTime? {
+        val prefs = PrefsRepository(context)
+        if (!prefs.hasLocation) return null
+        val method = CalculationMethod.forIndex(methodIndex)
+        val madhab = Madhab.fromIndex(madhabIndex)
+        for (dayOffset in 0..3) {
+            val date = from.toLocalDate().plusDays(dayOffset.toLong())
+            val base = baseDateTime(prayer, date, prefs.latitude, prefs.longitude, method, madhab)
+                ?: continue
+            val candidate = base.plusMinutes(offsetMinutes.toLong())
+            if (candidate.isAfter(from)) return candidate
+        }
+        return null
+    }
+
+    /**
      * The time [prayer] falls at on [date] under the given settings, before offsets. Lets the
      * settings screen preview a choice the user has not saved yet.
      */
