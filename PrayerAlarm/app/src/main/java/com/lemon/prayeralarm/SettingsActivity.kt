@@ -212,6 +212,15 @@ class SettingsActivity : AppCompatActivity() {
                 override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
 
+            // Seven expanded cards is a long scroll, so each prayer collapses to one line
+            // and only opens when it is the one being edited.
+            rowBinding.rowHeader.setOnClickListener {
+                val opening = rowBinding.rowDetails.visibility != android.view.View.VISIBLE
+                rowBinding.rowDetails.visibility =
+                    if (opening) android.view.View.VISIBLE else android.view.View.GONE
+                rowBinding.rowChevron.text = if (opening) "▴" else "▾"
+            }
+
             binding.perPrayerContainer.addView(rowBinding.root)
             rowBindings[prayer] = rowBinding
         }
@@ -273,6 +282,16 @@ class SettingsActivity : AppCompatActivity() {
         )
     }
 
+    /** Compact mode label for the collapsed row, where the full wording will not fit. */
+    private fun shortMode(mode: AlarmMode): String = getString(
+        when (mode) {
+            AlarmMode.OFF -> R.string.mode_short_off
+            AlarmMode.VIBRATE_ALWAYS -> R.string.mode_short_vibrate
+            AlarmMode.LOUD_HOME_WIFI_ONLY -> R.string.mode_short_home
+            AlarmMode.LOUD_EVERYWHERE -> R.string.mode_short_everywhere
+        }
+    )
+
     private fun saveAll() {
         persistPendingEdits()
         refreshComputedTimes()
@@ -302,6 +321,7 @@ class SettingsActivity : AppCompatActivity() {
                 } else {
                     getString(R.string.settings_alarm_off)
                 }
+                rowBinding.rowSummary.text = getString(R.string.mode_short_off)
                 continue
             }
 
@@ -329,6 +349,13 @@ class SettingsActivity : AppCompatActivity() {
                     time
                 )
             }
+            val whenText = when (days) {
+                0L -> time
+                1L -> getString(R.string.settings_when_tomorrow, time)
+                else -> getString(R.string.settings_when_day, ringsAt.format(DAY_FORMAT), time)
+            }
+            rowBinding.rowSummary.text =
+                getString(R.string.settings_row_summary, whenText, shortMode(mode))
         }
     }
 

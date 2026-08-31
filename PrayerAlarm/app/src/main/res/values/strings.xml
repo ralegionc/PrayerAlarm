@@ -60,6 +60,13 @@
     <string name="settings_alarm_at_tomorrow">Alarm rings at %1$s tomorrow</string>
     <string name="settings_alarm_at_day">Alarm rings %1$s at %2$s</string>
     <string name="settings_alarm_off">Alarm off</string>
+    <string name="settings_row_summary">%1$s  ·  %2$s</string>
+    <string name="settings_when_tomorrow">%1$s tomorrow</string>
+    <string name="settings_when_day">%1$s %2$s</string>
+    <string name="mode_short_off">Off</string>
+    <string name="mode_short_vibrate">Vibrate</string>
+    <string name="mode_short_home">Azan at home</string>
+    <string name="mode_short_everywhere">Azan everywhere</string>
     <string name="settings_no_time">Set your location first</string>
     <string name="settings_save">Save changes</string>
     <string name="settings_saved">Saved. Alarms updated.</string>
