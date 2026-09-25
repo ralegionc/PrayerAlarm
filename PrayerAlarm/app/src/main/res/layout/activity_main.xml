@@ -189,6 +189,25 @@
                     android:textColor="@color/on_surface"
                     android:textSize="15sp"
                     android:textStyle="bold" />
+
+
+                <TextView
+
+                    android:id="@+id/iqamahFajr"
+
+                    android:layout_width="wrap_content"
+
+                    android:layout_height="wrap_content"
+
+                    android:layout_marginTop="2dp"
+
+                    android:maxLines="1"
+
+                    android:textColor="@color/muted"
+
+                    android:textSize="11sp"
+
+                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -219,6 +238,25 @@
                     android:textColor="@color/on_surface"
                     android:textSize="15sp"
                     android:textStyle="bold" />
+
+
+                <TextView
+
+                    android:id="@+id/iqamahSunrise"
+
+                    android:layout_width="wrap_content"
+
+                    android:layout_height="wrap_content"
+
+                    android:layout_marginTop="2dp"
+
+                    android:maxLines="1"
+
+                    android:textColor="@color/muted"
+
+                    android:textSize="11sp"
+
+                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -249,6 +287,25 @@
                     android:textColor="@color/on_surface"
                     android:textSize="15sp"
                     android:textStyle="bold" />
+
+
+                <TextView
+
+                    android:id="@+id/iqamahDhuhr"
+
+                    android:layout_width="wrap_content"
+
+                    android:layout_height="wrap_content"
+
+                    android:layout_marginTop="2dp"
+
+                    android:maxLines="1"
+
+                    android:textColor="@color/muted"
+
+                    android:textSize="11sp"
+
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
 
@@ -285,6 +342,25 @@
                     android:textColor="@color/on_surface"
                     android:textSize="15sp"
                     android:textStyle="bold" />
+
+
+                <TextView
+
+                    android:id="@+id/iqamahAsr"
+
+                    android:layout_width="wrap_content"
+
+                    android:layout_height="wrap_content"
+
+                    android:layout_marginTop="2dp"
+
+                    android:maxLines="1"
+
+                    android:textColor="@color/muted"
+
+                    android:textSize="11sp"
+
+                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -315,6 +391,25 @@
                     android:textColor="@color/on_surface"
                     android:textSize="15sp"
                     android:textStyle="bold" />
+
+
+                <TextView
+
+                    android:id="@+id/iqamahMaghrib"
+
+                    android:layout_width="wrap_content"
+
+                    android:layout_height="wrap_content"
+
+                    android:layout_marginTop="2dp"
+
+                    android:maxLines="1"
+
+                    android:textColor="@color/muted"
+
+                    android:textSize="11sp"
+
+                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout
@@ -345,6 +440,25 @@
                     android:textColor="@color/on_surface"
                     android:textSize="15sp"
                     android:textStyle="bold" />
+
+
+                <TextView
+
+                    android:id="@+id/iqamahIsha"
+
+                    android:layout_width="wrap_content"
+
+                    android:layout_height="wrap_content"
+
+                    android:layout_marginTop="2dp"
+
+                    android:maxLines="1"
+
+                    android:textColor="@color/muted"
+
+                    android:textSize="11sp"
+
+                    android:visibility="gone" />
             </LinearLayout>
         </LinearLayout>
         </LinearLayout>

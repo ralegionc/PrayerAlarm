@@ -10,7 +10,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
-import java.util.TimeZone
 
 /** Computes upcoming prayer times and schedules exact alarms for every enabled prayer. */
 object AlarmScheduler {
@@ -22,21 +21,44 @@ object AlarmScheduler {
     private const val REQUEST_CODE_BASE = 5100
     private const val REQUEST_CODE_PRE_BASE = 5200
 
+    /** A resolved alarm: when it rings, which day's prayer it belongs to, and what it counts from. */
+    class Preview(val ringsAt: LocalDateTime, val date: LocalDate, val fromIqamah: Boolean)
+
+    /** The moment an offset is measured from, and whether that moment is an iqamah. */
+    private class Base(val at: LocalDateTime, val fromIqamah: Boolean)
+
+    /** Everything needed to resolve times, gathered once per call. */
+    private class Setup(
+        val context: Context,
+        val lat: Double,
+        val lng: Double,
+        val method: CalculationMethod,
+        val madhab: Madhab
+    )
+
+    private fun setup(context: Context, methodIndex: Int? = null, madhabIndex: Int? = null): Setup? {
+        val prefs = PrefsRepository(context)
+        if (!prefs.hasLocation) return null
+        return Setup(
+            context,
+            prefs.latitude,
+            prefs.longitude,
+            CalculationMethod.forIndex(methodIndex ?: prefs.calculationMethodIndex),
+            Madhab.fromIndex(madhabIndex ?: prefs.madhabIndex)
+        )
+    }
+
     fun canScheduleExact(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         return alarmManager.canScheduleExactAlarms()
     }
 
-    /** Recomputes and (re)schedules alarms for all five prayers based on current settings. */
+    /** Recomputes and (re)schedules alarms for every prayer based on current settings. */
     fun scheduleAll(context: Context) {
         val prefs = PrefsRepository(context)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-        if (!prefs.hasLocation) return
-
-        val method = CalculationMethod.forIndex(prefs.calculationMethodIndex)
-        val madhab = Madhab.fromIndex(prefs.madhabIndex)
+        val s = setup(context) ?: return
         val now = LocalDateTime.now()
 
         for (prayer in Prayer.values()) {
@@ -45,20 +67,20 @@ object AlarmScheduler {
 
             if (mode == AlarmMode.OFF) {
                 alarmManager.cancel(pendingIntent)
+                alarmManager.cancel(buildPreReminderIntent(context, prayer))
                 continue
             }
 
-            val offset = prefs.offsetMinutes(prayer)
-            val triggerDateTime = nextOccurrence(
-                prayer, prefs.latitude, prefs.longitude, method, madhab, offset, now
+            val next = nextOccurrence(
+                s, prayer, prefs.offsetMinutes(prayer), prefs.alarmAnchor(prayer), now
             ) ?: continue
 
-            setExactAlarm(alarmManager, triggerDateTime, pendingIntent)
+            setExactAlarm(alarmManager, next.ringsAt, pendingIntent)
 
             // Optional "prayer is coming up" nudge ahead of the alarm itself.
             val preIntent = buildPreReminderIntent(context, prayer)
             val lead = prefs.preReminderMinutes
-            val preTime = triggerDateTime.minusMinutes(lead.toLong())
+            val preTime = next.ringsAt.minusMinutes(lead.toLong())
             if (lead <= 0 || !preTime.isAfter(now)) {
                 alarmManager.cancel(preIntent)
             } else {
@@ -86,25 +108,20 @@ object AlarmScheduler {
         }
     }
 
-    /** The next prayer due after [from], with per-prayer offsets applied. */
+    /** The next alarm that will actually ring after [from], across every prayer that has one. */
     fun nextPrayer(
         context: Context,
         from: LocalDateTime = LocalDateTime.now()
     ): Pair<Prayer, LocalDateTime>? {
-        for (dayOffset in 0..1) {
-            val date = from.toLocalDate().plusDays(dayOffset.toLong())
-            val times = timesForDate(context, date) ?: return null
-            var best: Pair<Prayer, LocalDateTime>? = null
-            for (prayer in Prayer.values()) {
-                val dt = LocalDateTime.of(date, times.getValue(prayer))
-                val current = best
-                if (dt.isAfter(from) && (current == null || dt.isBefore(current.second))) {
-                    best = prayer to dt
-                }
+        val prefs = PrefsRepository(context)
+        val s = setup(context) ?: return null
+        return Prayer.values()
+            .filter { prefs.alarmMode(it) != AlarmMode.OFF }
+            .mapNotNull { prayer ->
+                nextOccurrence(s, prayer, prefs.offsetMinutes(prayer), prefs.alarmAnchor(prayer), from)
+                    ?.let { prayer to it.ringsAt }
             }
-            if (best != null) return best
-        }
-        return null
+            .minByOrNull { it.second }
     }
 
     fun cancelAll(context: Context) {
@@ -115,182 +132,123 @@ object AlarmScheduler {
         }
     }
 
-    /**
-     * UTC offset in hours for [date] specifically.
-     *
-     * Using the offset at "now" for a future date puts every computed time an hour out across a
-     * daylight-saving boundary, which is exactly when a mis-timed Fajr alarm is least welcome.
-     */
-    private fun tzHoursFor(date: LocalDate): Double {
-        val millis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        return TimeZone.getDefault().getOffset(millis) / 3_600_000.0
-    }
+    private fun tzHoursFor(date: LocalDate): Double =
+        PrayerTimesCalculator.utcOffsetHours(date, ZoneId.systemDefault())
 
-    /** Full astronomical times for [date], including sunrise. No offsets applied. */
+    /** Full astronomical times for [date], including sunrise. No offsets, no timetable. */
     fun rawTimesForDate(context: Context, date: LocalDate): PrayerTimesCalculator.Times? {
-        val prefs = PrefsRepository(context)
-        if (!prefs.hasLocation) return null
-        return PrayerTimesCalculator.calculate(
-            date,
-            prefs.latitude,
-            prefs.longitude,
-            tzHoursFor(date),
-            CalculationMethod.forIndex(prefs.calculationMethodIndex),
-            Madhab.fromIndex(prefs.madhabIndex)
-        )
+        val s = setup(context) ?: return null
+        return calculate(s, date)
     }
 
-    /**
-     * Times for [date] computed from explicitly supplied settings rather than what is stored.
-     * Lets the settings screen preview the effect of a choice the user has not saved yet.
-     */
-    fun previewTimes(
-        context: Context,
-        date: LocalDate,
-        methodIndex: Int,
-        madhabIndex: Int
-    ): PrayerTimesCalculator.Times? {
-        val prefs = PrefsRepository(context)
-        if (!prefs.hasLocation) return null
-        return PrayerTimesCalculator.calculate(
-            date,
-            prefs.latitude,
-            prefs.longitude,
-            tzHoursFor(date),
-            CalculationMethod.forIndex(methodIndex),
-            Madhab.fromIndex(madhabIndex)
-        )
-    }
+    private fun calculate(s: Setup, date: LocalDate): PrayerTimesCalculator.Times =
+        PrayerTimesCalculator.calculate(date, s.lat, s.lng, tzHoursFor(date), s.method, s.madhab)
 
     /**
-     * The actual prayer times for [date], with no alarm offsets applied.
+     * The prayer times for [date] as they should be shown: the mosque's where a timetable is
+     * imported, otherwise the calculated ones. No alarm offsets.
      *
-     * This is what every screen should display. An offset delays the alarm, it does not move
-     * the prayer, so folding it into the shown time would misreport when the prayer is.
+     * An offset delays the alarm, it does not move the prayer, so folding it into the shown time
+     * would misreport when the prayer is.
      */
     fun prayerTimesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime>? {
-        val times = rawTimesForDate(context, date) ?: return null
+        val s = setup(context) ?: return null
+        val calculated = calculate(s, date)
         // Tahajjud belongs to a night rather than a day, so it has no place in a per-day map.
         return Prayer.values()
             .filter { it != Prayer.TAHAJJUD }
-            .associateWith { rawTimeFor(it, times) }
-    }
-
-    /**
-     * Times for [date] shifted by each prayer's alarm offset. For scheduling only — use
-     * [prayerTimesForDate] for anything the user reads.
-     */
-    fun timesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime>? {
-        val prefs = PrefsRepository(context)
-        val times = rawTimesForDate(context, date) ?: return null
-        return Prayer.values()
-            .filter { it != Prayer.TAHAJJUD }
             .associateWith { prayer ->
-                rawTimeFor(prayer, times).plusMinutes(prefs.offsetMinutes(prayer).toLong())
+                MosqueTimetable.prayerTime(context, prayer, date)?.toLocalTime()
+                    ?: rawTimeFor(prayer, calculated)
             }
     }
 
+    /** The mosque's iqamah times for [date]; empty without a timetable or on a day it lacks. */
+    fun iqamahTimesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime> =
+        Prayer.obligatory()
+            .mapNotNull { prayer ->
+                MosqueTimetable.iqamah(context, prayer, date)?.let { prayer to it.toLocalTime() }
+            }
+            .toMap()
+
+    /**
+     * The first time the alarm for [prayer] rings after [now].
+     *
+     * The search starts from yesterday. Isha can run past midnight, and Tahajjud always does, so
+     * the next ring can belong to a prayer dated the day before; starting from today missed the
+     * last third of a night that had already begun.
+     */
     private fun nextOccurrence(
+        s: Setup,
         prayer: Prayer,
-        lat: Double,
-        lng: Double,
-        method: CalculationMethod,
-        madhab: Madhab,
         offsetMinutes: Int,
+        anchor: AlarmAnchor,
         now: LocalDateTime
-    ): LocalDateTime? {
-        val today = LocalDate.now()
-        for (dayOffset in 0..3) {
-            val date = today.plusDays(dayOffset.toLong())
-            val base = baseDateTime(prayer, date, lat, lng, method, madhab) ?: continue
+    ): Preview? {
+        for (dayOffset in -1..3) {
+            val date = now.toLocalDate().plusDays(dayOffset.toLong())
+            val base = baseFor(s, prayer, date, anchor) ?: continue
             // A negative offset moves the alarm before the prayer, which is why this compares
             // the adjusted time rather than the prayer time itself.
-            val candidate = base.plusMinutes(offsetMinutes.toLong())
-            if (candidate.isAfter(now)) return candidate
+            val ringsAt = base.at.plusMinutes(offsetMinutes.toLong())
+            if (ringsAt.isAfter(now)) return Preview(ringsAt, date, base.fromIqamah)
         }
         return null
     }
 
     /**
-     * When [prayer] falls on [date], before any offset.
+     * What an alarm for [prayer] on [date] is measured from.
      *
-     * Tahajjud is the odd one out: it is two thirds of the way from Maghrib to the following
-     * Fajr, so it belongs to a night rather than to a day and cannot be read off a single day's
-     * times the way the others can.
+     * The mosque timetable wins where it has a value; asking for iqamah on a day it lists none
+     * falls back to that day's prayer time rather than skipping the alarm. Tahajjud is always
+     * calculated: it is two thirds of the way from Maghrib to the following Fajr, so it belongs
+     * to a night and no timetable lists it.
      */
-    private fun baseDateTime(
-        prayer: Prayer,
-        date: LocalDate,
-        lat: Double,
-        lng: Double,
-        method: CalculationMethod,
-        madhab: Madhab
-    ): LocalDateTime? {
+    private fun baseFor(s: Setup, prayer: Prayer, date: LocalDate, anchor: AlarmAnchor): Base? {
         if (prayer == Prayer.TAHAJJUD) {
-            val tonight = PrayerTimesCalculator.calculate(date, lat, lng, tzHoursFor(date), method, madhab)
+            val tonight = calculate(s, date)
             val next = date.plusDays(1)
-            val tomorrow = PrayerTimesCalculator.calculate(next, lat, lng, tzHoursFor(next), method, madhab)
             val maghrib = LocalDateTime.of(date, tonight.maghrib)
-            val fajr = LocalDateTime.of(next, tomorrow.fajr)
+            val fajr = LocalDateTime.of(next, calculate(s, next).fajr)
             val nightMinutes = Duration.between(maghrib, fajr).toMinutes()
             if (nightMinutes <= 0) return null
-            return maghrib.plusMinutes(nightMinutes * 2 / 3)
+            return Base(maghrib.plusMinutes(nightMinutes * 2 / 3), fromIqamah = false)
         }
-        val times = PrayerTimesCalculator.calculate(date, lat, lng, tzHoursFor(date), method, madhab)
-        return LocalDateTime.of(date, rawTimeFor(prayer, times))
+        if (anchor == AlarmAnchor.IQAMAH) {
+            MosqueTimetable.iqamah(s.context, prayer, date)?.let { return Base(it, fromIqamah = true) }
+        }
+        MosqueTimetable.prayerTime(s.context, prayer, date)?.let { return Base(it, fromIqamah = false) }
+        return Base(LocalDateTime.of(date, rawTimeFor(prayer, calculate(s, date))), fromIqamah = false)
     }
 
     /**
-     * The next moment an alarm for [prayer] would actually fire, under settings the user may
-     * not have saved yet.
-     *
-     * The settings screen used to compute everything from today, so once a prayer had passed it
-     * advertised a time that was already hours gone. Resolving the next occurrence instead means
-     * a row always answers the question being asked of it: when will this ring.
+     * The next time an alarm for [prayer] would ring, under settings the user may not have saved
+     * yet. Lets the settings screen say "rings at 5:44 a.m. tomorrow, 10 min before iqamah"
+     * while the controls are still being moved.
      */
     fun previewNextAlarm(
         context: Context,
         prayer: Prayer,
         offsetMinutes: Int,
+        anchor: AlarmAnchor,
         methodIndex: Int,
         madhabIndex: Int,
         from: LocalDateTime = LocalDateTime.now()
-    ): LocalDateTime? {
-        val prefs = PrefsRepository(context)
-        if (!prefs.hasLocation) return null
-        val method = CalculationMethod.forIndex(methodIndex)
-        val madhab = Madhab.fromIndex(madhabIndex)
-        for (dayOffset in 0..3) {
-            val date = from.toLocalDate().plusDays(dayOffset.toLong())
-            val base = baseDateTime(prayer, date, prefs.latitude, prefs.longitude, method, madhab)
-                ?: continue
-            val candidate = base.plusMinutes(offsetMinutes.toLong())
-            if (candidate.isAfter(from)) return candidate
-        }
-        return null
+    ): Preview? {
+        val s = setup(context, methodIndex, madhabIndex) ?: return null
+        return nextOccurrence(s, prayer, offsetMinutes, anchor, from)
     }
 
-    /**
-     * The time [prayer] falls at on [date] under the given settings, before offsets. Lets the
-     * settings screen preview a choice the user has not saved yet.
-     */
-    fun previewBaseTime(
+    /** When [prayer] begins on [date] under the given settings, before any offset. */
+    fun previewPrayerTime(
         context: Context,
         prayer: Prayer,
         date: LocalDate,
         methodIndex: Int,
         madhabIndex: Int
     ): LocalTime? {
-        val prefs = PrefsRepository(context)
-        if (!prefs.hasLocation) return null
-        return baseDateTime(
-            prayer,
-            date,
-            prefs.latitude,
-            prefs.longitude,
-            CalculationMethod.forIndex(methodIndex),
-            Madhab.fromIndex(madhabIndex)
-        )?.toLocalTime()
+        val s = setup(context, methodIndex, madhabIndex) ?: return null
+        return baseFor(s, prayer, date, AlarmAnchor.PRAYER_TIME)?.at?.toLocalTime()
     }
 
     /** The astronomical time for one prayer, before any user offset. */
@@ -301,7 +259,7 @@ object AlarmScheduler {
         Prayer.ASR -> times.asr
         Prayer.MAGHRIB -> times.maghrib
         Prayer.ISHA -> times.isha
-        // Never reached: baseDateTime intercepts Tahajjud, which needs two days of times.
+        // Never reached: baseFor intercepts Tahajjud, which needs two days of times.
         Prayer.TAHAJJUD -> times.isha
     }
 
