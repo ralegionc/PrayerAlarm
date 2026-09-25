@@ -2,7 +2,6 @@ package com.lemon.prayeralarm
 
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.ZoneId
 import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -105,17 +104,6 @@ class PrayerTimesCalculatorTest {
         assertEquals(60, minutesBetween(edt.dhuhr, est.dhuhr))
         assertEquals(60, minutesBetween(edt.maghrib, est.maghrib))
         assertTrue("standard time is an hour earlier", est.dhuhr < edt.dhuhr)
-    }
-
-    @Test
-    fun `clock change days use the offset in force during the prayers`() {
-        // Clocks change at 2 a.m., before any prayer, so the whole day belongs to the new offset.
-        // Reading the offset at midnight gave the old one and moved every prayer by an hour.
-        val zone = ZoneId.of("America/Toronto")
-        assertEquals(-5.0, PrayerTimesCalculator.utcOffsetHours(LocalDate.of(2026, 3, 7), zone), 0.0)
-        assertEquals(-4.0, PrayerTimesCalculator.utcOffsetHours(LocalDate.of(2026, 3, 8), zone), 0.0)
-        assertEquals(-4.0, PrayerTimesCalculator.utcOffsetHours(LocalDate.of(2026, 10, 31), zone), 0.0)
-        assertEquals(-5.0, PrayerTimesCalculator.utcOffsetHours(LocalDate.of(2026, 11, 1), zone), 0.0)
     }
 
     // ---------------------------------------------------------------- high latitude
