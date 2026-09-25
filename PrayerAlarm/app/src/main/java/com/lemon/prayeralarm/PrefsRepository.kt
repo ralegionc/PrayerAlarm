@@ -90,26 +90,6 @@ class PrefsRepository(context: Context) {
         prefs.edit().putInt(KEY_MODE_PREFIX + prayer.storageKey, mode.index).apply()
     }
 
-    /** Sunrise and Tahajjud have no iqamah, so for them this is always the prayer time. */
-    fun alarmAnchor(prayer: Prayer): AlarmAnchor {
-        if (!prayer.isObligatory) return AlarmAnchor.PRAYER_TIME
-        return AlarmAnchor.fromIndex(prefs.getInt(KEY_ANCHOR_PREFIX + prayer.storageKey, 0))
-    }
-
-    fun setAlarmAnchor(prayer: Prayer, anchor: AlarmAnchor) {
-        prefs.edit().putInt(KEY_ANCHOR_PREFIX + prayer.storageKey, anchor.index).apply()
-    }
-
-    /** Where the imported mosque timetable came from: a link, or a file name. */
-    var timetableSource: String
-        get() = prefs.getString(KEY_TIMETABLE_SOURCE, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_TIMETABLE_SOURCE, value).apply()
-
-    /** What the last import found, shown in settings so a bad file does not go unnoticed. */
-    var timetableSummary: String
-        get() = prefs.getString(KEY_TIMETABLE_SUMMARY, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_TIMETABLE_SUMMARY, value).apply()
-
     companion object {
         private const val KEY_LAT = "lat"
         private const val KEY_LNG = "lng"
@@ -124,8 +104,5 @@ class PrefsRepository(context: Context) {
         private const val KEY_AZAN_DEFAULT = "azan_default_uri"
         private const val KEY_OFFSET_PREFIX = "offset_"
         private const val KEY_MODE_PREFIX = "mode_"
-        private const val KEY_ANCHOR_PREFIX = "anchor_"
-        private const val KEY_TIMETABLE_SOURCE = "timetable_source"
-        private const val KEY_TIMETABLE_SUMMARY = "timetable_summary"
     }
 }

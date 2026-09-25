@@ -108,8 +108,9 @@ class PrayerWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widgetHijri, hijriText(today))
 
             val times = AlarmScheduler.prayerTimesForDate(context, today)
+            val raw = AlarmScheduler.rawTimesForDate(context, today)
 
-            if (times == null) {
+            if (times == null || raw == null) {
                 views.setTextViewText(
                     R.id.widgetCity,
                     context.getString(R.string.widget_no_location)
@@ -127,7 +128,7 @@ class PrayerWidgetProvider : AppWidgetProvider() {
 
             val values = listOf(
                 times.getValue(Prayer.FAJR),
-                times.getValue(Prayer.SUNRISE),
+                raw.sunrise,
                 times.getValue(Prayer.DHUHR),
                 times.getValue(Prayer.ASR),
                 times.getValue(Prayer.MAGHRIB),
@@ -227,11 +228,12 @@ class PrayerWidgetProvider : AppWidgetProvider() {
 
         private fun boundaries(context: Context, today: LocalDate): Boundaries? {
             val times = AlarmScheduler.prayerTimesForDate(context, today) ?: return null
+            val raw = AlarmScheduler.rawTimesForDate(context, today) ?: return null
             fun at(time: LocalTime) = LocalDateTime.of(today, time)
             val tomorrow = AlarmScheduler.prayerTimesForDate(context, today.plusDays(1))
             return Boundaries(
                 fajr = at(times.getValue(Prayer.FAJR)),
-                sunrise = at(times.getValue(Prayer.SUNRISE)),
+                sunrise = at(raw.sunrise),
                 dhuhr = at(times.getValue(Prayer.DHUHR)),
                 asr = at(times.getValue(Prayer.ASR)),
                 maghrib = at(times.getValue(Prayer.MAGHRIB)),

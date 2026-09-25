@@ -17,9 +17,6 @@ import java.time.LocalDateTime
 import java.time.chrono.HijrahDate
 import java.time.format.DateTimeFormatter
 
-/** No AM/PM: the cell is narrow, and an iqamah is never far from its prayer. */
-private val IQAMAH_FORMAT = DateTimeFormatter.ofPattern("h:mm")
-
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -122,7 +119,6 @@ class MainActivity : AppCompatActivity() {
             val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
             val next = findNextPrayer(today, todayTimes)
             fillGrid(todayTimes, next?.first, timeFormatter)
-            fillIqamah(AlarmScheduler.iqamahTimesForDate(this, today))
             showNextPrayer(next, timeFormatter)
             binding.textLastThird.text = lastThirdText(today, timeFormatter)
         }
@@ -162,33 +158,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * The mosque's iqamah under each prayer, when a timetable gives them. Sunrise has none, but
-     * its line is kept (blank) whenever the others show, so the grid's rows stay level.
-     */
-    private fun fillIqamah(iqamah: Map<Prayer, java.time.LocalTime>) {
-        val visibility = if (iqamah.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
-        for ((prayer, view) in iqamahViews()) {
-            view.visibility = visibility
-            view.text = iqamah[prayer]?.let { getString(R.string.grid_iqamah, it.format(IQAMAH_FORMAT)) }.orEmpty()
-        }
-    }
-
-    private fun iqamahViews(): List<Pair<Prayer, android.widget.TextView>> = listOf(
-        Prayer.FAJR to binding.iqamahFajr,
-        Prayer.SUNRISE to binding.iqamahSunrise,
-        Prayer.DHUHR to binding.iqamahDhuhr,
-        Prayer.ASR to binding.iqamahAsr,
-        Prayer.MAGHRIB to binding.iqamahMaghrib,
-        Prayer.ISHA to binding.iqamahIsha
-    )
-
     private fun clearGrid() {
         for ((_, cell, labels) in gridCells()) {
             labels.second.text = ""
             cell.setBackgroundResource(0)
         }
-        fillIqamah(emptyMap())
     }
 
     /** Fills the header block with the upcoming prayer, its time, and how long until it. */

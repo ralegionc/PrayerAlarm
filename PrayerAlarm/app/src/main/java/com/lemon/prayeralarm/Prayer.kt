@@ -36,20 +36,6 @@ enum class AlarmMode(val index: Int) {
     }
 }
 
-/**
- * What a prayer's alarm offset is measured from: the start of the prayer time, or the iqamah,
- * when the congregation actually stands. Iqamah needs a mosque timetable; without one, or on a
- * day the timetable gives no iqamah, the alarm is measured from the prayer time instead.
- */
-enum class AlarmAnchor(val index: Int) {
-    PRAYER_TIME(0),
-    IQAMAH(1);
-
-    companion object {
-        fun fromIndex(i: Int): AlarmAnchor = values().firstOrNull { it.index == i } ?: PRAYER_TIME
-    }
-}
-
 enum class Madhab(val index: Int, val asrShadowFactor: Int) {
     STANDARD(0, 1),
     HANAFI(1, 2);
