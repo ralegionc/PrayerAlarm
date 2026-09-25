@@ -61,7 +61,13 @@
     <string name="settings_offset_label_iqamah">Minutes after iqamah (minus for before)</string>
     <string name="settings_iqamah_line">Iqamah %1$s</string>
     <string name="settings_iqamah_none">No iqamah listed that day, so it rings from the prayer time</string>
-    <string name="settings_iqamah_needs_timetable">Iqamah needs a mosque timetable, so for now it rings from the prayer time</string>
+    <string name="settings_iqamah_needs_timetable">No iqamah set for this prayer yet, so for now it rings from the prayer time. Enter your mosque’s iqamah above.</string>
+    <string name="settings_iqamah_rule_label">Your mosque’s iqamah</string>
+    <string name="settings_iqamah_fixed_unset">Fixed time: not set</string>
+    <string name="settings_iqamah_fixed_set">Fixed time: %1$s</string>
+    <string name="settings_iqamah_fixed_clear">Clear fixed time</string>
+    <string name="settings_iqamah_after_label">Or minutes after adhan</string>
+    <string name="settings_iqamah_rule_hint">With both filled in, the later one is used: 8:30 p.m., or 5 min after the adhan once the adhan is later than that. Leave both empty to use an imported timetable.</string>
     <string name="anchor_ref_prayer">the prayer time</string>
     <string name="anchor_ref_iqamah">iqamah</string>
     <string name="relation_at">at %1$s</string>

@@ -33,10 +33,16 @@ object AlarmScheduler {
         val lat: Double,
         val lng: Double,
         val method: CalculationMethod,
-        val madhab: Madhab
+        val madhab: Madhab,
+        val iqamahRules: Map<Prayer, IqamahRule>
     )
 
-    private fun setup(context: Context, methodIndex: Int? = null, madhabIndex: Int? = null): Setup? {
+    private fun setup(
+        context: Context,
+        methodIndex: Int? = null,
+        madhabIndex: Int? = null,
+        iqamahRules: Map<Prayer, IqamahRule>? = null
+    ): Setup? {
         val prefs = PrefsRepository(context)
         if (!prefs.hasLocation) return null
         return Setup(
@@ -44,7 +50,8 @@ object AlarmScheduler {
             prefs.latitude,
             prefs.longitude,
             CalculationMethod.forIndex(methodIndex ?: prefs.calculationMethodIndex),
-            Madhab.fromIndex(madhabIndex ?: prefs.madhabIndex)
+            Madhab.fromIndex(madhabIndex ?: prefs.madhabIndex),
+            iqamahRules ?: Prayer.obligatory().associateWith { prefs.iqamahRule(it) }
         )
     }
 
@@ -163,13 +170,28 @@ object AlarmScheduler {
             }
     }
 
-    /** The mosque's iqamah times for [date]; empty without a timetable or on a day it lacks. */
-    fun iqamahTimesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime> =
-        Prayer.obligatory()
-            .mapNotNull { prayer ->
-                MosqueTimetable.iqamah(context, prayer, date)?.let { prayer to it.toLocalTime() }
-            }
+    /** The iqamah times for [date]; empty when neither the user nor a timetable gives any. */
+    fun iqamahTimesForDate(context: Context, date: LocalDate): Map<Prayer, LocalTime> {
+        val s = setup(context) ?: return emptyMap()
+        return Prayer.obligatory()
+            .mapNotNull { prayer -> iqamahAt(s, prayer, date)?.let { prayer to it.toLocalTime() } }
             .toMap()
+    }
+
+    /** When [prayer] begins on [date]: the mosque's time where a timetable has one. */
+    private fun prayerAt(s: Setup, prayer: Prayer, date: LocalDate): LocalDateTime =
+        MosqueTimetable.prayerTime(s.context, prayer, date)
+            ?: LocalDateTime.of(date, rawTimeFor(prayer, calculate(s, date)))
+
+    /**
+     * The iqamah for [prayer] on [date]. The user's own rule wins over a timetable: it is what
+     * they entered for their mosque, and a timetable may well belong to a different one.
+     */
+    private fun iqamahAt(s: Setup, prayer: Prayer, date: LocalDate): LocalDateTime? {
+        val rule = s.iqamahRules[prayer] ?: IqamahRule.NONE
+        if (rule.isSet) return rule.resolve(prayerAt(s, prayer, date))
+        return MosqueTimetable.iqamah(s.context, prayer, date)
+    }
 
     /**
      * The first time the alarm for [prayer] rings after [now].
@@ -199,8 +221,8 @@ object AlarmScheduler {
     /**
      * What an alarm for [prayer] on [date] is measured from.
      *
-     * The mosque timetable wins where it has a value; asking for iqamah on a day it lists none
-     * falls back to that day's prayer time rather than skipping the alarm. Tahajjud is always
+     * Asking for iqamah when none is known for that day falls back to the day's prayer time
+     * rather than skipping the alarm. Tahajjud is always
      * calculated: it is two thirds of the way from Maghrib to the following Fajr, so it belongs
      * to a night and no timetable lists it.
      */
@@ -215,10 +237,9 @@ object AlarmScheduler {
             return Base(maghrib.plusMinutes(nightMinutes * 2 / 3), fromIqamah = false)
         }
         if (anchor == AlarmAnchor.IQAMAH) {
-            MosqueTimetable.iqamah(s.context, prayer, date)?.let { return Base(it, fromIqamah = true) }
+            iqamahAt(s, prayer, date)?.let { return Base(it, fromIqamah = true) }
         }
-        MosqueTimetable.prayerTime(s.context, prayer, date)?.let { return Base(it, fromIqamah = false) }
-        return Base(LocalDateTime.of(date, rawTimeFor(prayer, calculate(s, date))), fromIqamah = false)
+        return Base(prayerAt(s, prayer, date), fromIqamah = false)
     }
 
     /**
@@ -233,9 +254,10 @@ object AlarmScheduler {
         anchor: AlarmAnchor,
         methodIndex: Int,
         madhabIndex: Int,
+        iqamahRules: Map<Prayer, IqamahRule>,
         from: LocalDateTime = LocalDateTime.now()
     ): Preview? {
-        val s = setup(context, methodIndex, madhabIndex) ?: return null
+        val s = setup(context, methodIndex, madhabIndex, iqamahRules) ?: return null
         return nextOccurrence(s, prayer, offsetMinutes, anchor, from)
     }
 
@@ -249,6 +271,20 @@ object AlarmScheduler {
     ): LocalTime? {
         val s = setup(context, methodIndex, madhabIndex) ?: return null
         return baseFor(s, prayer, date, AlarmAnchor.PRAYER_TIME)?.at?.toLocalTime()
+    }
+
+    /** The iqamah for [prayer] on [date] under settings that may not be saved yet. */
+    fun previewIqamah(
+        context: Context,
+        prayer: Prayer,
+        date: LocalDate,
+        methodIndex: Int,
+        madhabIndex: Int,
+        iqamahRules: Map<Prayer, IqamahRule>
+    ): LocalDateTime? {
+        if (!prayer.isObligatory) return null
+        val s = setup(context, methodIndex, madhabIndex, iqamahRules) ?: return null
+        return iqamahAt(s, prayer, date)
     }
 
     /** The astronomical time for one prayer, before any user offset. */

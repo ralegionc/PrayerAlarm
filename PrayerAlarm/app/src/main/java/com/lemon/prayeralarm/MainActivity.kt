@@ -163,7 +163,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * The mosque's iqamah under each prayer, when a timetable gives them. Sunrise has none, but
+     * The iqamah under each prayer, where one is set or imported. Sunrise has none, but
      * its line is kept (blank) whenever the others show, so the grid's rows stay level.
      */
     private fun fillIqamah(iqamah: Map<Prayer, java.time.LocalTime>) {
