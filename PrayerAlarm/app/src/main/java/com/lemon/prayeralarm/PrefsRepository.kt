@@ -2,7 +2,6 @@ package com.lemon.prayeralarm
 
 import android.content.Context
 import android.content.SharedPreferences
-import java.time.LocalTime
 
 /** Central storage for all user settings. Backed by SharedPreferences. */
 class PrefsRepository(context: Context) {
@@ -101,27 +100,6 @@ class PrefsRepository(context: Context) {
         prefs.edit().putInt(KEY_ANCHOR_PREFIX + prayer.storageKey, anchor.index).apply()
     }
 
-    /** The user's own iqamah for [prayer]; takes precedence over an imported timetable. */
-    fun iqamahRule(prayer: Prayer): IqamahRule {
-        if (!prayer.isObligatory) return IqamahRule.NONE
-        val fixed = prefs.getInt(KEY_IQAMAH_FIXED_PREFIX + prayer.storageKey, -1)
-        val after = prefs.getInt(KEY_IQAMAH_AFTER_PREFIX + prayer.storageKey, -1)
-        return IqamahRule(
-            fixed.takeIf { it >= 0 }?.let { LocalTime.ofSecondOfDay(it * 60L) },
-            after.takeIf { it >= 0 }
-        )
-    }
-
-    fun setIqamahRule(prayer: Prayer, rule: IqamahRule) {
-        prefs.edit()
-            .putInt(
-                KEY_IQAMAH_FIXED_PREFIX + prayer.storageKey,
-                rule.fixed?.let { it.toSecondOfDay() / 60 } ?: -1
-            )
-            .putInt(KEY_IQAMAH_AFTER_PREFIX + prayer.storageKey, rule.minutesAfterAdhan ?: -1)
-            .apply()
-    }
-
     /** Where the imported mosque timetable came from: a link, or a file name. */
     var timetableSource: String
         get() = prefs.getString(KEY_TIMETABLE_SOURCE, "") ?: ""
@@ -147,8 +125,6 @@ class PrefsRepository(context: Context) {
         private const val KEY_OFFSET_PREFIX = "offset_"
         private const val KEY_MODE_PREFIX = "mode_"
         private const val KEY_ANCHOR_PREFIX = "anchor_"
-        private const val KEY_IQAMAH_FIXED_PREFIX = "iqamah_fixed_"
-        private const val KEY_IQAMAH_AFTER_PREFIX = "iqamah_after_"
         private const val KEY_TIMETABLE_SOURCE = "timetable_source"
         private const val KEY_TIMETABLE_SUMMARY = "timetable_summary"
     }

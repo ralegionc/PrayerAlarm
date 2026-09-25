@@ -1,13 +1,11 @@
 package com.lemon.prayeralarm
 
 import android.app.NotificationManager
-import android.app.TimePickerDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.text.format.DateFormat
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
@@ -19,7 +17,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.lemon.prayeralarm.databinding.ActivitySettingsBinding
 import com.lemon.prayeralarm.databinding.ItemPrayerSettingsRowBinding
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.Executors
@@ -29,9 +26,6 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySettingsBinding
     private lateinit var prefs: PrefsRepository
     private val rowBindings = mutableMapOf<Prayer, ItemPrayerSettingsRowBinding>()
-
-    /** Fixed iqamah times as picked on screen, saved with everything else on Save. */
-    private val pendingFixedIqamah = mutableMapOf<Prayer, LocalTime?>()
 
     /** Timetable downloads and parsing, kept off the main thread. */
     private val worker = Executors.newSingleThreadExecutor()
@@ -298,10 +292,8 @@ class SettingsActivity : AppCompatActivity() {
             rowBinding.rowModeSpinner.setSelection(prefs.alarmMode(prayer).index)
             rowBinding.rowAnchorSpinner.setSelection(prefs.alarmAnchor(prayer).index)
             // Sunrise and Tahajjud have no iqamah to count from.
-            val iqamahVisibility = if (prayer.isObligatory) View.VISIBLE else View.GONE
-            rowBinding.rowAnchorBlock.visibility = iqamahVisibility
-            rowBinding.rowIqamahRuleBlock.visibility = iqamahVisibility
-            if (prayer.isObligatory) setupIqamahRule(prayer, rowBinding)
+            rowBinding.rowAnchorBlock.visibility =
+                if (prayer.isObligatory) View.VISIBLE else View.GONE
 
             // Typing an offset moves the alarm-time line straight away, so the effect of a
             // change is visible before it is saved.
@@ -327,58 +319,6 @@ class SettingsActivity : AppCompatActivity() {
             rowBindings[prayer] = rowBinding
         }
     }
-
-    private fun setupIqamahRule(prayer: Prayer, row: ItemPrayerSettingsRowBinding) {
-        val rule = prefs.iqamahRule(prayer)
-        pendingFixedIqamah[prayer] = rule.fixed
-        row.rowIqamahAfter.setText(rule.minutesAfterAdhan?.toString().orEmpty())
-        row.rowIqamahAfter.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(t: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(e: Editable?) {
-                refreshComputedTimes()
-            }
-        })
-        row.rowIqamahFixed.setOnClickListener {
-            val start = pendingFixedIqamah[prayer]
-                ?: AlarmScheduler.previewPrayerTime(
-                    this, prayer, LocalDate.now(),
-                    binding.spinnerMethod.selectedItemPosition,
-                    binding.spinnerMadhab.selectedItemPosition
-                )
-                ?: LocalTime.NOON
-            TimePickerDialog(this, { _, hour, minute ->
-                pendingFixedIqamah[prayer] = LocalTime.of(hour, minute)
-                showFixedIqamah(prayer, row)
-                refreshComputedTimes()
-            }, start.hour, start.minute, DateFormat.is24HourFormat(this)).show()
-        }
-        row.rowIqamahFixedClear.setOnClickListener {
-            pendingFixedIqamah[prayer] = null
-            showFixedIqamah(prayer, row)
-            refreshComputedTimes()
-        }
-        showFixedIqamah(prayer, row)
-    }
-
-    private fun showFixedIqamah(prayer: Prayer, row: ItemPrayerSettingsRowBinding) {
-        val fixed = pendingFixedIqamah[prayer]
-        row.rowIqamahFixed.text = if (fixed == null) {
-            getString(R.string.settings_iqamah_fixed_unset)
-        } else {
-            getString(R.string.settings_iqamah_fixed_set, fixed.format(TIME_FORMAT))
-        }
-        row.rowIqamahFixedClear.visibility = if (fixed == null) View.GONE else View.VISIBLE
-    }
-
-    /** The iqamah rules as they stand on screen, saved or not. */
-    private fun iqamahRulesFromControls(): Map<Prayer, IqamahRule> =
-        rowBindings.filterKeys { it.isObligatory }.mapValues { (prayer, row) ->
-            IqamahRule(
-                pendingFixedIqamah[prayer],
-                row.rowIqamahAfter.text.toString().toIntOrNull()
-            )
-        }
 
     private fun setupExactAlarmWarning() {
         val needsPermission =
@@ -408,8 +348,6 @@ class SettingsActivity : AppCompatActivity() {
         // Clamped so a stray keystroke cannot push the nudge hours away from the prayer.
         prefs.preReminderMinutes =
             (binding.editPreReminder.text.toString().toIntOrNull() ?: 0).coerceIn(0, 120)
-        val rules = iqamahRulesFromControls()
-        for ((prayer, rule) in rules) prefs.setIqamahRule(prayer, rule)
         for ((prayer, rowBinding) in rowBindings) {
             prefs.setOffsetMinutes(prayer, rowBinding.rowOffset.text.toString().toIntOrNull() ?: 0)
             prefs.setAlarmMode(
@@ -470,7 +408,6 @@ class SettingsActivity : AppCompatActivity() {
         val madhabIndex = binding.spinnerMadhab.selectedItemPosition
         val today = LocalDate.now()
         val timetable = MosqueTimetable.isActive(this)
-        val rules = iqamahRulesFromControls()
 
         for ((prayer, row) in rowBindings) {
             val mode = AlarmMode.fromIndex(row.rowModeSpinner.selectedItemPosition)
@@ -487,7 +424,7 @@ class SettingsActivity : AppCompatActivity() {
 
             if (mode == AlarmMode.OFF) {
                 // Nothing will ring, so today's times are shown purely as a reference point.
-                val shown = showTimes(row, prayer, today, methodIndex, madhabIndex, rules)
+                val shown = showTimes(row, prayer, today, methodIndex, madhabIndex, timetable)
                 row.rowAlarmTime.text = getString(
                     if (shown) R.string.settings_alarm_off else R.string.settings_no_time
                 )
@@ -497,7 +434,7 @@ class SettingsActivity : AppCompatActivity() {
             }
 
             val preview = AlarmScheduler.previewNextAlarm(
-                this, prayer, offset, anchor, methodIndex, madhabIndex, rules
+                this, prayer, offset, anchor, methodIndex, madhabIndex
             )
             if (preview == null) {
                 row.rowPrayerTime.text = ""
@@ -508,13 +445,13 @@ class SettingsActivity : AppCompatActivity() {
 
             // Both lines describe the same upcoming occurrence rather than today, which may
             // already be hours in the past.
-            showTimes(row, prayer, preview.date, methodIndex, madhabIndex, rules)
+            showTimes(row, prayer, preview.date, methodIndex, madhabIndex, timetable)
 
             // Iqamah was asked for but this occurrence counts from the prayer time: say why,
             // so the alarm does not quietly ring earlier than expected.
             val note = when {
                 anchor != AlarmAnchor.IQAMAH || preview.fromIqamah -> null
-                !timetable && rules[prayer]?.isSet != true -> R.string.settings_iqamah_needs_timetable
+                !timetable -> R.string.settings_iqamah_needs_timetable
                 else -> R.string.settings_iqamah_none
             }
             row.rowAnchorNote.visibility = if (note == null) View.GONE else View.VISIBLE
@@ -549,7 +486,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
-     * Fills in the prayer time for [date] and, where one is known, its iqamah.
+     * Fills in the prayer time for [date] and, where the mosque gives one, its iqamah.
      * Returns false when there is no time to show at all.
      */
     private fun showTimes(
@@ -558,13 +495,13 @@ class SettingsActivity : AppCompatActivity() {
         date: LocalDate,
         methodIndex: Int,
         madhabIndex: Int,
-        rules: Map<Prayer, IqamahRule>
+        timetable: Boolean
     ): Boolean {
         val prayerTime =
             AlarmScheduler.previewPrayerTime(this, prayer, date, methodIndex, madhabIndex)
         row.rowPrayerTime.text = prayerTime?.format(TIME_FORMAT).orEmpty()
         val iqamah =
-            AlarmScheduler.previewIqamah(this, prayer, date, methodIndex, madhabIndex, rules)
+            if (timetable && prayer.isObligatory) MosqueTimetable.iqamah(this, prayer, date) else null
         row.rowIqamah.visibility = if (iqamah == null) View.GONE else View.VISIBLE
         iqamah?.let {
             row.rowIqamah.text = getString(R.string.settings_iqamah_line, it.toLocalTime().format(TIME_FORMAT))
