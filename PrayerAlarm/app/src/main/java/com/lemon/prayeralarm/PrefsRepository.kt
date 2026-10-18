@@ -61,15 +61,24 @@ class PrefsRepository(context: Context) {
         get() = prefs.getInt(KEY_PRE_REMINDER, 0)
         set(value) = prefs.edit().putInt(KEY_PRE_REMINDER, value).apply()
 
-    /** Content URI of the user's Fajr azan recording, or "" to fall back. */
-    var fajrAzanUri: String
-        get() = prefs.getString(KEY_AZAN_FAJR, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_AZAN_FAJR, value).apply()
-
-    /** Content URI of the azan used for the other four prayers, or "" to fall back. */
+    /** Content URI of the default azan, used by any prayer without its own, or "" for the ringtone. */
     var defaultAzanUri: String
         get() = prefs.getString(KEY_AZAN_DEFAULT, "") ?: ""
         set(value) = prefs.edit().putString(KEY_AZAN_DEFAULT, value).apply()
+
+    /**
+     * The recording chosen for [prayer] alone, or "" to use the default. Fajr keeps the key it
+     * had when it was the only prayer with its own file, so an existing choice carries over.
+     */
+    fun azanUri(prayer: Prayer): String =
+        prefs.getString(azanKey(prayer), "") ?: ""
+
+    fun setAzanUri(prayer: Prayer, uri: String) {
+        prefs.edit().putString(azanKey(prayer), uri).apply()
+    }
+
+    private fun azanKey(prayer: Prayer) =
+        if (prayer == Prayer.FAJR) KEY_AZAN_FAJR else KEY_AZAN_PRAYER_PREFIX + prayer.storageKey
 
     fun offsetMinutes(prayer: Prayer): Int =
         prefs.getInt(KEY_OFFSET_PREFIX + prayer.storageKey, 0)
@@ -102,6 +111,7 @@ class PrefsRepository(context: Context) {
         private const val KEY_PRE_REMINDER = "pre_reminder_minutes"
         private const val KEY_AZAN_FAJR = "azan_fajr_uri"
         private const val KEY_AZAN_DEFAULT = "azan_default_uri"
+        private const val KEY_AZAN_PRAYER_PREFIX = "azan_uri_"
         private const val KEY_OFFSET_PREFIX = "offset_"
         private const val KEY_MODE_PREFIX = "mode_"
     }

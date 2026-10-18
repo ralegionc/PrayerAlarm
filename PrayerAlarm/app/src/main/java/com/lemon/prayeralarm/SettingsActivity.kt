@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.lemon.prayeralarm.databinding.ActivitySettingsBinding
+import com.lemon.prayeralarm.databinding.ItemAzanSlotBinding
 import com.lemon.prayeralarm.databinding.ItemPrayerSettingsRowBinding
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -27,21 +28,33 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var prefs: PrefsRepository
     private val rowBindings = mutableMapOf<Prayer, ItemPrayerSettingsRowBinding>()
 
-    private val pickFajrAzan =
+    /** One slot per prayer plus the default (null), each with its own name line. */
+    private val azanSlots = mutableMapOf<Prayer?, ItemAzanSlotBinding>()
+
+    /**
+     * Which slot the open file picker is filling. Kept across a configuration change or process
+     * death, since the picker can outlive this activity.
+     */
+    private var pickingFor: Prayer? = null
+
+    private val pickAzan =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            onAzanPicked(uri, forFajr = true)
+            onAzanPicked(uri, pickingFor)
         }
 
-    private val pickOtherAzan =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            onAzanPicked(uri, forFajr = false)
-        }
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_PICKING_FOR, pickingFor?.storageKey)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         prefs = PrefsRepository(this)
+        pickingFor = savedInstanceState?.getString(STATE_PICKING_FOR)?.let { key ->
+            Prayer.values().firstOrNull { it.storageKey == key }
+        }
 
         setupMethodSpinner()
         setupMadhabSpinner()
@@ -124,21 +137,40 @@ class SettingsActivity : AppCompatActivity() {
         )
     }
 
+    /** The default slot first, then one per obligatory prayer, in prayer order. */
     private fun setupAzanFields() {
-        binding.buttonChooseFajrAzan.setOnClickListener { pickFajrAzan.launch(AUDIO_MIME_TYPES) }
-        binding.buttonChooseOtherAzan.setOnClickListener { pickOtherAzan.launch(AUDIO_MIME_TYPES) }
-        binding.buttonClearFajrAzan.setOnClickListener {
-            prefs.fajrAzanUri = ""
-            refreshAzanLabels()
-        }
-        binding.buttonClearOtherAzan.setOnClickListener {
-            prefs.defaultAzanUri = ""
-            refreshAzanLabels()
+        binding.azanContainer.removeAllViews()
+        azanSlots.clear()
+        val inflater = LayoutInflater.from(this)
+        for (slot in listOf<Prayer?>(null) + Prayer.values().filter { it.isObligatory }) {
+            val slotBinding = ItemAzanSlotBinding.inflate(inflater, binding.azanContainer, false)
+            slotBinding.azanSlotLabel.text = if (slot == null) {
+                getString(R.string.settings_azan_default_label)
+            } else {
+                getString(R.string.settings_azan_prayer_label, NotificationHelper.prayerName(this, slot))
+            }
+            slotBinding.azanSlotChoose.setOnClickListener {
+                pickingFor = slot
+                pickAzan.launch(AUDIO_MIME_TYPES)
+            }
+            slotBinding.azanSlotClear.setOnClickListener {
+                storeAzan(slot, "")
+                refreshAzanLabels()
+            }
+            binding.azanContainer.addView(slotBinding.root)
+            azanSlots[slot] = slotBinding
         }
         refreshAzanLabels()
     }
 
-    private fun onAzanPicked(uri: Uri?, forFajr: Boolean) {
+    private fun storedAzan(slot: Prayer?): String =
+        if (slot == null) prefs.defaultAzanUri else prefs.azanUri(slot)
+
+    private fun storeAzan(slot: Prayer?, uri: String) {
+        if (slot == null) prefs.defaultAzanUri = uri else prefs.setAzanUri(slot, uri)
+    }
+
+    private fun onAzanPicked(uri: Uri?, slot: Prayer?) {
         if (uri == null) return
         // Without a persistable grant the URI stops working as soon as this process dies,
         // which would silently break the alarm hours later when it actually matters.
@@ -151,18 +183,21 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.settings_azan_unreadable, Toast.LENGTH_LONG).show()
             return
         }
-        if (forFajr) prefs.fajrAzanUri = uri.toString() else prefs.defaultAzanUri = uri.toString()
+        storeAzan(slot, uri.toString())
         refreshAzanLabels()
     }
 
     private fun refreshAzanLabels() {
-        binding.textOtherAzanName.text = azanLabel(prefs.defaultAzanUri, sharedAvailable = false) {
-            prefs.defaultAzanUri = ""
+        // The default goes first: if its file has gone, it is cleared here, and the prayer
+        // slots must then say "ringtone" rather than point at a default that no longer exists.
+        azanSlots[null]?.azanSlotName?.text =
+            azanLabel(storedAzan(null), sharedAvailable = false) { storeAzan(null, "") }
+        val defaultSet = prefs.defaultAzanUri.isNotBlank()
+        for ((slot, slotBinding) in azanSlots) {
+            if (slot == null) continue
+            slotBinding.azanSlotName.text =
+                azanLabel(storedAzan(slot), sharedAvailable = defaultSet) { storeAzan(slot, "") }
         }
-        binding.textFajrAzanName.text =
-            azanLabel(prefs.fajrAzanUri, sharedAvailable = prefs.defaultAzanUri.isNotBlank()) {
-                prefs.fajrAzanUri = ""
-            }
     }
 
     /**
@@ -365,6 +400,7 @@ class SettingsActivity : AppCompatActivity() {
 
     companion object {
         private val AUDIO_MIME_TYPES = arrayOf("audio/*")
+        private const val STATE_PICKING_FOR = "picking_azan_for"
         private val TIME_FORMAT = DateTimeFormatter.ofPattern("h:mm a")
         private val DAY_FORMAT = DateTimeFormatter.ofPattern("EEEE")
     }

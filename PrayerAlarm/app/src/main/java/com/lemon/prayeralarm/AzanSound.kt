@@ -7,20 +7,19 @@ import android.provider.OpenableColumns
 /**
  * Decides which recording plays for a given prayer.
  *
- * Users supply their own audio: one file for Fajr (whose adhan has an extra line) and one for
- * the remaining four prayers. Resolution order for Fajr is its own file, then the shared file,
- * then null — and null means the caller should fall back to the device's alarm ringtone, so a
- * user who adds nothing still gets a working alarm.
+ * Users supply their own audio: a default file, plus an optional file for any of the five
+ * prayers (Fajr's adhan has an extra line, for instance). Resolution order is the prayer's own
+ * file, then the default, then null — and null means the caller should fall back to the
+ * device's alarm ringtone, so a user who adds nothing still gets a working alarm.
  */
 object AzanSound {
 
     /** The recording to play for [prayer], or null to fall back to the alarm ringtone. */
     fun uriFor(context: Context, prayer: Prayer): Uri? {
         val prefs = PrefsRepository(context)
-        val stored = when (prayer) {
-            Prayer.FAJR -> prefs.fajrAzanUri.ifBlank { prefs.defaultAzanUri }
-            else -> prefs.defaultAzanUri
-        }
+        // Sunrise and Tahajjud are not called with an adhan of their own, so they use the default.
+        val own = if (prayer.isObligatory) prefs.azanUri(prayer) else ""
+        val stored = own.ifBlank { prefs.defaultAzanUri }
         if (stored.isBlank()) return null
         return try {
             Uri.parse(stored)
