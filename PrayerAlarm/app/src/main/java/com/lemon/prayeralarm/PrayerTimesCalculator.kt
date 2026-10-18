@@ -2,6 +2,7 @@ package com.lemon.prayeralarm
 
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.ZoneId
 import kotlin.math.*
 
 /**
@@ -25,6 +26,16 @@ object PrayerTimesCalculator {
         val maghrib: LocalTime,
         val isha: LocalTime
     )
+
+    /**
+     * The UTC offset, in hours, in force during the prayers of [date] in [zone].
+     *
+     * Read at midday rather than midnight. Clocks change in the small hours, so on changeover
+     * day the midnight offset is the old one while every prayer happens under the new one, and
+     * reading it at midnight put all five prayers an hour out on those two days each year.
+     */
+    fun utcOffsetHours(date: LocalDate, zone: ZoneId): Double =
+        zone.rules.getOffset(date.atTime(12, 0).atZone(zone).toInstant()).totalSeconds / 3600.0
 
     /**
      * @param timeZoneOffsetHours e.g. 5.5 for UTC+5:30. Include DST if applicable.

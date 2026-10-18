@@ -10,7 +10,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
-import java.util.TimeZone
 
 /** Computes upcoming prayer times and schedules exact alarms for every enabled prayer. */
 object AlarmScheduler {
@@ -120,11 +119,11 @@ object AlarmScheduler {
      *
      * Using the offset at "now" for a future date puts every computed time an hour out across a
      * daylight-saving boundary, which is exactly when a mis-timed Fajr alarm is least welcome.
+     * Read at noon rather than midnight, since on the changeover day itself midnight still has
+     * the old offset.
      */
-    private fun tzHoursFor(date: LocalDate): Double {
-        val millis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        return TimeZone.getDefault().getOffset(millis) / 3_600_000.0
-    }
+    private fun tzHoursFor(date: LocalDate): Double =
+        PrayerTimesCalculator.utcOffsetHours(date, ZoneId.systemDefault())
 
     /** Full astronomical times for [date], including sunrise. No offsets applied. */
     fun rawTimesForDate(context: Context, date: LocalDate): PrayerTimesCalculator.Times? {
